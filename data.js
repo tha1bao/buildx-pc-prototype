@@ -1,48 +1,89 @@
-// Dữ liệu mẫu cho prototype – giá khớp file Excel (giá thị trường thấp nhất 20/10/2026, giá bán = ×1,06 làm tròn 10.000đ).
-// Linh kiện gắn dấu * là giá tham khảo thêm để minh họa kiểm tra tương thích.
+// BuildX PC – dữ liệu mẫu theo Kế hoạch kinh doanh v3 (27/10/2026) và file mô hình tài chính.
+// Giá bán = giá lẻ thấp nhất thị trường × (1 + 8%), làm tròn 10.000đ (sheet "Linh kiện").
+// Giá vốn = giá thị trường × (1 − chiết khấu NPP giả định).
+// Mã gắn demo:true là dữ liệu bổ sung để thử luật tương thích, giá minh họa (không có trong sheet Linh kiện).
+// Mã gắn ref:true là model tham chiếu đã ngừng bán, chỉ dùng để khai báo "Đã có" và nâng cấp.
 window.BX = (function () {
-  const MARKUP = 0.06;
-  const sell = (m) => Math.round(m * (1 + MARKUP) / 10000) * 10000;
-  const C = {
-    cpu: [
-      { id: "C01", n: "Intel Core i5-12400F (Tray)", mkt: 3050000, socket: "LGA1700", w: 117, stock: 6, brand: "Intel", spec: { "Nhân/luồng": "6/12", "Xung tối đa": "4,4 GHz", "Socket": "LGA1700", "Điện năng tối đa": "117 W" }, why: "6 nhân 12 luồng, đủ cho mọi GPU tới RTX 5060 Ti; rẻ nhất nền LGA1700 + DDR4." },
-      { id: "C02", n: "Intel Core i5-14600KF (Tray)", mkt: 5690000, socket: "LGA1700", w: 181, stock: 0, brand: "Intel", spec: { "Nhân/luồng": "14/20", "Xung tối đa": "5,3 GHz", "Socket": "LGA1700", "Điện năng tối đa": "181 W" }, why: "14 nhân, mạnh khi dựng video/render, không nghẽn RTX 5070." },
-      { id: "X01", n: "AMD Ryzen 5 7500F *", mkt: 3450000, socket: "AM5", w: 88, stock: 0, brand: "AMD", spec: { "Nhân/luồng": "6/12", "Socket": "AM5", "RAM": "Chỉ DDR5" }, why: "Nền AM5 nâng cấp lâu dài nhưng bắt buộc DDR5 (đang rất đắt)." }],
-    main: [
-      { id: "M01", n: "ASUS Prime H610M-K D4", mkt: 1690000, socket: "LGA1700", ram: "DDR4", ff: "mATX", stock: 4, brand: "ASUS", spec: { "Chipset": "H610", "Khe RAM": "2 × DDR4", "Kích thước": "mATX" }, why: "Đủ cho i5-12400F, tiết kiệm để dồn tiền cho VGA." },
-      { id: "M02", n: "ASUS Prime B760M-A D4", mkt: 2550000, socket: "LGA1700", ram: "DDR4", ff: "mATX", stock: 5, brand: "ASUS", spec: { "Chipset": "B760", "Khe RAM": "4 × DDR4", "Kích thước": "mATX" }, why: "4 khe RAM để nâng 32GB sau này, VRM tốt hơn H610." },
-      { id: "M03", n: "Gigabyte B760M Gaming Plus WiFi DDR4", mkt: 3199000, socket: "LGA1700", ram: "DDR4", ff: "mATX", stock: 3, brand: "Gigabyte", spec: { "Chipset": "B760", "Khe RAM": "4 × DDR4", "WiFi": "WiFi 6" }, why: "WiFi 6, VRM đủ cho i5-14600KF chạy tải dài." },
-      { id: "X02", n: "Mainboard B650M DDR5 *", mkt: 3200000, socket: "AM5", ram: "DDR5", ff: "mATX", stock: 0, brand: "MSI", spec: { "Chipset": "B650", "Khe RAM": "4 × DDR5" }, why: "Dành cho Ryzen AM5, chỉ nhận RAM DDR5." }],
-    ram: [
-      { id: "R01", n: "RAM DDR4 16GB 3200", mkt: 2690000, type: "DDR4", gb: 16, stock: 14, brand: "G.Skill", spec: { "Dung lượng": "16 GB", "Bus": "3200 MHz" }, why: "DDR4 rẻ hơn DDR5 khoảng 2,5 lần (10/2026), chênh FPS nhỏ." },
-      { id: "R02", n: "RAM DDR4 32GB (2×16GB) 3200", mkt: 5380000, type: "DDR4", gb: 32, stock: 4, brand: "TeamGroup", spec: { "Dung lượng": "2 × 16 GB", "Bus": "3200 MHz" }, why: "32GB cho Premiere, Blender, AI cục bộ, stream." },
-      { id: "X03", n: "RAM DDR5 16GB 5600 *", mkt: 6690000, type: "DDR5", gb: 16, stock: 0, brand: "Kingston", spec: { "Dung lượng": "16 GB", "Bus": "5600 MHz" }, why: "Chỉ dùng với mainboard DDR5; giá rất cao năm 2026." }],
-    ssd: [
-      { id: "S01", n: "SSD NVMe Gen3 512GB", mkt: 2150000, stock: 11, brand: "Hiksemi", spec: { "Chuẩn": "PCIe 3.0 x4", "Dung lượng": "512 GB" }, why: "Đủ Windows + 3–4 game; còn khe M.2 để nâng thêm." },
-      { id: "S02", n: "SSD NVMe Gen4 1TB", mkt: 4990000, stock: 5, brand: "WD", spec: { "Chuẩn": "PCIe 4.0 x4", "Dung lượng": "1 TB" }, why: "Chứa thư viện game lớn hoặc project video." }],
-    vga: [
-      { id: "G01", n: "GeForce RTX 5050 8GB", mkt: 7900000, w: 130, len: 225, tier: 1, stock: 2, brand: "NVIDIA", spec: { "VRAM": "8 GB", "TBP": "130 W", "Dài": "225 mm" }, why: "eSports 1080p trên 144 FPS, chi phí thấp nhất có DLSS 4." },
-      { id: "G02", n: "GeForce RTX 5060 8GB", mkt: 10390000, w: 145, len: 240, tier: 2, stock: 1, brand: "NVIDIA", spec: { "VRAM": "8 GB GDDR7", "TBP": "145 W", "Dài": "240 mm" }, why: "Điểm cân bằng tốt nhất cho game AAA 1080p năm 2026." },
-      { id: "G03", n: "GeForce RTX 5060 Ti 16GB", mkt: 14390000, w: 180, len: 280, tier: 3, stock: 0, brand: "NVIDIA", spec: { "VRAM": "16 GB GDDR7", "TBP": "180 W", "Dài": "280 mm" }, why: "16GB VRAM cho đồ họa, AI và game nặng texture ở 1440p." },
-      { id: "G04", n: "GeForce RTX 5070 12GB", mkt: 18500000, w: 250, len: 300, tier: 4, stock: 0, brand: "NVIDIA", spec: { "VRAM": "12 GB GDDR7", "TBP": "250 W", "Dài": "300 mm" }, why: "Hiệu năng cao cho 1440p, render nhanh hơn rõ rệt." }],
-    psu: [
-      { id: "P01", n: "Cooler Master MWE 650 Bronze V3", mkt: 1499000, w: 650, stock: 8, brand: "Cooler Master", spec: { "Công suất": "650 W", "Chuẩn": "80 Plus Bronze" }, why: "650W Bronze, dư tải an toàn cho cấu hình tầm trung." },
-      { id: "P02", n: "Cooler Master MWE 750 Bronze V3", mkt: 1599000, w: 750, stock: 3, brand: "Cooler Master", spec: { "Công suất": "750 W", "Chuẩn": "80 Plus Bronze" }, why: "Dư tải cho RTX 5070 + CPU K." }],
-    case: [
-      { id: "K01", n: "Case mATX phổ thông có kính", mkt: 690000, ff: ["mATX", "ITX"], gpu: 300, cool: 155, stock: 6, brand: "Xigmatek", spec: { "Hỗ trợ main": "mATX, ITX", "VGA tối đa": "300 mm", "Tản tối đa": "155 mm" }, why: "Gọn, đủ gió cho cấu hình eSports." },
-      { id: "K02", n: "Cooler Master MasterBox TD500 Mesh V2", mkt: 1190000, ff: ["ATX", "mATX", "ITX"], gpu: 410, cool: 165, stock: 5, brand: "Cooler Master", spec: { "Hỗ trợ main": "ATX, mATX, ITX", "VGA tối đa": "410 mm", "Tản tối đa": "165 mm" }, why: "Mặt lưới thoáng, nhiệt độ thấp khi burn-in và chơi lâu." },
-      { id: "X04", n: "Case Mini-ITX nhỏ gọn *", mkt: 1500000, ff: ["ITX"], gpu: 200, cool: 70, stock: 0, brand: "Jonsbo", spec: { "Hỗ trợ main": "ITX", "VGA tối đa": "200 mm" }, why: "Rất nhỏ, chỉ hợp main ITX và VGA ngắn." }],
-    cool: [
-      { id: "T01", n: "Cooler Master Hyper 212 Spectrum V3", mkt: 399000, h: 152, tdp: 150, stock: 9, brand: "Cooler Master", spec: { "Chiều cao": "152 mm", "Tản nhiệt": "~150 W" }, why: "CPU bản Tray không kèm quạt; tháp đơn đủ cho i5-12400F." },
-      { id: "T02", n: "Cooler Master Hyper 620S ARGB", mkt: 799000, h: 157, tdp: 220, stock: 4, brand: "Cooler Master", spec: { "Chiều cao": "157 mm", "Tản nhiệt": "~220 W" }, why: "Tháp đôi cho i5-14600KF chạy tải lâu." }],
-  };
-  const SLOTS = [["cpu", "CPU"], ["main", "Mainboard"], ["ram", "RAM"], ["ssd", "SSD"], ["vga", "VGA"], ["psu", "Nguồn"], ["case", "Case"], ["cool", "Tản nhiệt"]];
-  const TIERS = [
-    { key: "esports", name: "BX Esports", use: "LoL, Valorant, CS2, học tập – 1080p", b: { cpu: "C01", main: "M01", ram: "R01", ssd: "S01", vga: "G01", psu: "P01", case: "K01", cool: "T01" }, comp: null },
-    { key: "gamer", name: "BX Gamer", use: "Game AAA 1080p, stream nhẹ", b: { cpu: "C01", main: "M02", ram: "R01", ssd: "S01", vga: "G02", psu: "P01", case: "K02", cool: "T01" }, comp: 27690000 },
-    { key: "creator", name: "BX Creator", use: "Đồ họa, dựng video, AI nhẹ – 1440p", b: { cpu: "C02", main: "M03", ram: "R02", ssd: "S02", vga: "G03", psu: "P01", case: "K02", cool: "T02" }, comp: 39150000 },
-    { key: "pro", name: "BX Pro", use: "Game 1440p cao, render", b: { cpu: "C02", main: "M03", ram: "R02", ssd: "S02", vga: "G04", psu: "P02", case: "K02", cool: "T02" }, comp: null },
+  const MARKUP = 0.08;
+  const sell = (m) => Math.round((m * (1 + MARKUP)) / 10000) * 10000;
+
+  const CAT = { main: "Mainboard", cpu: "CPU", ram: "RAM", vga: "VGA", ssd: "Lưu trữ", cool: "Tản nhiệt", case: "Case", psu: "Nguồn", opt: "Phụ kiện" };
+  // Thứ tự Build PC theo v3 mục 14.3: mainboard trước, rồi CPU → RAM → VGA → lưu trữ → tản nhiệt → case → nguồn
+  const ORDER = ["main", "cpu", "ram", "vga", "ssd", "cool", "case", "psu"];
+
+  const P = [
+    // ---- CPU ----
+    { id: "C01", cat: "cpu", n: "Intel Core i5-12400F (Tray)", brand: "Intel", mkt: 3050000, disc: 0.05, grp: "B", stock: 10, socket: "LGA1700", w: 117, igpu: false, box: false, why: "6 nhân 12 luồng, đủ cho GPU tới RTX 5060 Ti; nền LGA1700 + DDR4 rẻ nhất.", spec: { "Nhân/luồng": "6/12", "Xung tối đa": "4,4 GHz" } },
+    { id: "C02", cat: "cpu", n: "Intel Core i5-14600KF (Tray)", brand: "Intel", mkt: 5690000, disc: 0.05, grp: "C", stock: 0, socket: "LGA1700", w: 181, igpu: false, box: false, why: "14 nhân, mạnh khi dựng video và render, không nghẽn RTX 5070.", spec: { "Nhân/luồng": "14/20", "Xung tối đa": "5,3 GHz" } },
+    { id: "C03", cat: "cpu", n: "Intel Core i5-12400 (Box, có GPU tích hợp)", brand: "Intel", mkt: 3690000, disc: 0.05, grp: "B", stock: 3, socket: "LGA1700", w: 117, igpu: true, box: true, demo: true, why: "Có GPU tích hợp và tản kèm hộp: dựng được máy văn phòng không cần VGA rời.", spec: { "Nhân/luồng": "6/12", "GPU": "UHD 730" } },
+    { id: "C04", cat: "cpu", n: "AMD Ryzen 5 7500F", brand: "AMD", mkt: 3450000, disc: 0.05, grp: "B", stock: 2, socket: "AM5", w: 88, igpu: false, box: false, demo: true, why: "Nền AM5 nâng cấp lâu dài nhưng bắt buộc RAM DDR5 (giá cao năm 2026).", spec: { "Nhân/luồng": "6/12", "RAM": "Chỉ DDR5" } },
+    // ---- Mainboard ----
+    { id: "M01", cat: "main", n: "ASUS Prime H610M-K D4", brand: "ASUS", mkt: 1690000, disc: 0.08, grp: "B", stock: 6, socket: "LGA1700", ram: "DDR4", slots: 2, maxRam: 64, bus: 3200, ff: "mATX", m2: 1, sata: 4, x1: 1, wifi: false, why: "Đủ cho i5-12400F, tiết kiệm để dồn tiền cho VGA.", spec: { "Chipset": "H610" } },
+    { id: "M02", cat: "main", n: "ASUS Prime B760M-A D4", brand: "ASUS", mkt: 2550000, disc: 0.08, grp: "B", stock: 7, socket: "LGA1700", ram: "DDR4", slots: 4, maxRam: 128, bus: 3200, ff: "mATX", m2: 2, sata: 4, x1: 1, wifi: false, why: "4 khe RAM để nâng 32GB sau này, 2 khe M.2.", spec: { "Chipset": "B760" } },
+    { id: "M03", cat: "main", n: "Gigabyte B760M Gaming Plus WiFi DDR4", brand: "Gigabyte", mkt: 3199000, disc: 0.08, grp: "B", stock: 3, socket: "LGA1700", ram: "DDR4", slots: 4, maxRam: 128, bus: 3200, ff: "mATX", m2: 2, sata: 4, x1: 1, wifi: true, why: "WiFi 6, VRM đủ cho i5-14600KF chạy tải dài.", spec: { "Chipset": "B760" } },
+    { id: "M04", cat: "main", n: "MSI PRO B650M-P (AM5, DDR5)", brand: "MSI", mkt: 3290000, disc: 0.08, grp: "B", stock: 2, socket: "AM5", ram: "DDR5", slots: 4, maxRam: 192, bus: 6000, ff: "mATX", m2: 2, sata: 4, x1: 1, wifi: false, demo: true, why: "Dành cho Ryzen AM5, chỉ nhận RAM DDR5.", spec: { "Chipset": "B650" } },
+    { id: "M05", cat: "main", n: "ASUS Prime H610I-Plus D4 (Mini-ITX)", brand: "ASUS", mkt: 2890000, disc: 0.08, grp: "B", stock: 1, socket: "LGA1700", ram: "DDR4", slots: 2, maxRam: 64, bus: 3200, ff: "ITX", m2: 1, sata: 2, x1: 0, wifi: false, demo: true, why: "Mini-ITX cho máy nhỏ gọn; ít khe mở rộng.", spec: { "Chipset": "H610" } },
+    { id: "M06", cat: "main", n: "MSI PRO B760-P DDR4 II (ATX)", brand: "MSI", mkt: 3390000, disc: 0.08, grp: "B", stock: 2, socket: "LGA1700", ram: "DDR4", slots: 4, maxRam: 128, bus: 3200, ff: "ATX", m2: 2, sata: 4, x1: 2, wifi: false, demo: true, why: "ATX nhiều khe mở rộng; cần case ATX.", spec: { "Chipset": "B760" } },
+    // ---- RAM (mỗi mã là 1 thanh) ----
+    { id: "R01", cat: "ram", n: "RAM DDR4 16GB 3200", brand: "G.Skill", mkt: 2690000, disc: 0.07, grp: "A", stock: 16, type: "DDR4", gb: 16, bus: 3200, why: "DDR4 rẻ hơn DDR5 khoảng 2,5 lần (10/2026), chênh FPS nhỏ.", spec: {} },
+    { id: "R03", cat: "ram", n: "RAM DDR4 8GB 3200", brand: "TeamGroup", mkt: 1390000, disc: 0.07, grp: "A", stock: 8, type: "DDR4", gb: 8, bus: 3200, demo: true, why: "Thanh 8GB để nâng máy cũ lên 16GB.", spec: {} },
+    { id: "R04", cat: "ram", n: "RAM DDR4 16GB 3600", brand: "Kingston", mkt: 2890000, disc: 0.07, grp: "A", stock: 4, type: "DDR4", gb: 16, bus: 3600, demo: true, why: "Bus 3600, mainboard H610/B760 DDR4 chạy ở 3200.", spec: {} },
+    { id: "R02", cat: "ram", n: "RAM DDR5 16GB 5600", brand: "Kingston", mkt: 6690000, disc: 0.07, grp: "A", stock: 2, type: "DDR5", gb: 16, bus: 5600, demo: true, why: "Chỉ dùng với mainboard DDR5; giá rất cao năm 2026.", spec: {} },
+    // ---- VGA ----
+    { id: "G01", cat: "vga", n: "GeForce RTX 5050 8GB", brand: "NVIDIA", mkt: 7900000, disc: 0.05, grp: "B", stock: 5, w: 130, len: 225, pin8: 1, p16: false, tier: 1, why: "eSports 1080p trên 144 FPS, rẻ nhất có DLSS 4.", spec: { "VRAM": "8 GB" } },
+    { id: "G02", cat: "vga", n: "GeForce RTX 5060 8GB", brand: "NVIDIA", mkt: 10390000, disc: 0.05, grp: "B", stock: 6, w: 145, len: 240, pin8: 1, p16: false, tier: 2, why: "Điểm cân bằng tốt nhất cho game AAA 1080p năm 2026.", spec: { "VRAM": "8 GB GDDR7" } },
+    { id: "G03", cat: "vga", n: "GeForce RTX 5060 Ti 16GB", brand: "NVIDIA", mkt: 14390000, disc: 0.05, grp: "C", stock: 0, w: 180, len: 280, pin8: 1, p16: false, tier: 3, why: "16GB VRAM cho đồ họa, AI và game nặng texture ở 1440p.", spec: { "VRAM": "16 GB GDDR7" } },
+    { id: "G04", cat: "vga", n: "GeForce RTX 5070 12GB", brand: "NVIDIA", mkt: 18500000, disc: 0.05, grp: "C", stock: 0, w: 250, len: 300, pin8: 2, p16: true, tier: 4, why: "Hiệu năng cao cho 1440p, render nhanh hơn rõ rệt.", spec: { "VRAM": "12 GB GDDR7" } },
+    { id: "G05", cat: "vga", n: "GeForce RTX 5070 Ti 16GB", brand: "NVIDIA", mkt: 25990000, disc: 0.05, grp: "C", stock: 0, w: 300, len: 330, pin8: 3, p16: true, tier: 4, demo: true, why: "Card dài 330 mm, cần case lớn và nguồn ≥ 750W.", spec: { "VRAM": "16 GB GDDR7" } },
+    // ---- Lưu trữ ----
+    { id: "S01", cat: "ssd", n: "SSD NVMe Gen3 512GB", brand: "Hiksemi", mkt: 2150000, disc: 0.08, grp: "A", stock: 11, iface: "NVMe", form: "M.2", gb: 512, why: "Đủ Windows và 3–4 game.", spec: {} },
+    { id: "S02", cat: "ssd", n: "SSD NVMe Gen4 1TB", brand: "WD", mkt: 4990000, disc: 0.08, grp: "A", stock: 5, iface: "NVMe", form: "M.2", gb: 1000, why: "Chứa thư viện game lớn hoặc project video.", spec: {} },
+    { id: "S03", cat: "ssd", n: "SSD SATA 2.5\" 512GB", brand: "Kingston", mkt: 1690000, disc: 0.08, grp: "A", stock: 6, iface: "SATA", form: "2.5", gb: 512, demo: true, why: "Dùng cổng SATA, hợp máy đã hết khe M.2.", spec: {} },
+    // ---- Tản nhiệt ----
+    { id: "T01", cat: "cool", n: "Cooler Master Hyper 212 Spectrum V3", brand: "Cooler Master", mkt: 399000, disc: 0.15, grp: "A", stock: 9, sockets: ["LGA1700", "AM5", "AM4"], h: 152, rad: 0, tdp: 150, why: "CPU bản Tray không kèm quạt; tháp đơn đủ cho i5-12400F.", spec: {} },
+    { id: "T02", cat: "cool", n: "Cooler Master Hyper 620S ARGB", brand: "Cooler Master", mkt: 799000, disc: 0.15, grp: "A", stock: 4, sockets: ["LGA1700", "AM5", "AM4"], h: 157, rad: 0, tdp: 220, why: "Tháp đôi cho i5-14600KF chạy tải lâu.", spec: {} },
+    { id: "T03", cat: "cool", n: "Tản low-profile 47 mm", brand: "Noctua", mkt: 450000, disc: 0.15, grp: "A", stock: 3, sockets: ["LGA1700"], h: 47, rad: 0, tdp: 95, demo: true, why: "Cho case Mini-ITX thấp; chỉ đủ CPU ≤ 95W.", spec: {} },
+    { id: "T04", cat: "cool", n: "Tản nước AIO 240 mm", brand: "Cooler Master", mkt: 1990000, disc: 0.15, grp: "A", stock: 2, sockets: ["LGA1700", "AM5"], h: 0, rad: 240, tdp: 250, demo: true, why: "Tản nước 240 mm, cần case có chỗ lắp radiator 240.", spec: {} },
+    // ---- Case ----
+    { id: "K01", cat: "case", n: "Case mATX phổ thông có kính", brand: "Xigmatek", mkt: 690000, disc: 0.15, grp: "A", stock: 6, ff: ["mATX", "ITX"], gpu: 300, cool: 155, rad: 120, fans: 4, pre: 1, color: "Đen", why: "Gọn, đủ gió cho cấu hình eSports.", spec: {} },
+    { id: "K02", cat: "case", n: "Cooler Master MasterBox TD500 Mesh V2", brand: "Cooler Master", mkt: 1190000, disc: 0.15, grp: "A", stock: 7, ff: ["ATX", "mATX", "ITX"], gpu: 410, cool: 165, rad: 360, fans: 6, pre: 3, color: "Đen", why: "Mặt lưới thoáng, nhiệt độ thấp khi burn-in và chơi lâu.", spec: {} },
+    { id: "K03", cat: "case", n: "Case Mini-ITX nhỏ gọn", brand: "Jonsbo", mkt: 1500000, disc: 0.15, grp: "A", stock: 2, ff: ["ITX"], gpu: 200, cool: 70, rad: 0, fans: 2, pre: 1, color: "Đen", demo: true, why: "Rất nhỏ, chỉ hợp main ITX, VGA ngắn và tản thấp.", spec: {} },
+    { id: "K04", cat: "case", n: "Case mATX màu trắng có kính", brand: "Xigmatek", mkt: 790000, disc: 0.15, grp: "A", stock: 4, ff: ["mATX", "ITX"], gpu: 320, cool: 160, rad: 240, fans: 6, pre: 0, color: "Trắng", demo: true, why: "Bản màu trắng cho khách thích build trắng.", spec: {} },
+    // ---- Nguồn ----
+    { id: "P01", cat: "psu", n: "Cooler Master MWE 650 Bronze V3", brand: "Cooler Master", mkt: 1499000, disc: 0.12, grp: "A", stock: 12, w: 650, pin8: 2, p16: false, why: "650W Bronze, dư tải an toàn cho cấu hình tầm trung.", spec: {} },
+    { id: "P02", cat: "psu", n: "Cooler Master MWE 750 Bronze V3", brand: "Cooler Master", mkt: 1599000, disc: 0.12, grp: "A", stock: 3, w: 750, pin8: 4, p16: false, why: "Dư tải cho RTX 5070 và CPU dòng K.", spec: {} },
+    { id: "P03", cat: "psu", n: "Nguồn 550W Bronze", brand: "Xigmatek", mkt: 1090000, disc: 0.12, grp: "A", stock: 4, w: 550, pin8: 1, p16: false, demo: true, why: "Đủ cho máy văn phòng, eSports nhẹ.", spec: {} },
+    // ---- Phụ kiện tùy chọn (UC07) ----
+    { id: "F01", cat: "opt", n: "Bộ 3 quạt case 120 mm ARGB", brand: "Cooler Master", mkt: 390000, disc: 0.15, grp: "A", stock: 10, need: "fan3", why: "Tăng luồng gió; cần case còn 3 vị trí quạt.", spec: {} },
+    { id: "W01", cat: "opt", n: "Card WiFi 6 + Bluetooth PCIe", brand: "TP-Link", mkt: 450000, disc: 0.12, grp: "A", stock: 6, need: "x1", why: "Cho mainboard không có WiFi; cần khe PCIe x1 trống.", spec: {} },
+    { id: "D01", cat: "opt", n: "Màn hình 24\" 165Hz IPS", brand: "ASUS", mkt: 2990000, disc: 0.08, grp: "A", stock: 5, need: "", why: "Tận dụng FPS cao của cấu hình gaming.", spec: {} },
+    { id: "KB1", cat: "opt", n: "Bộ phím chuột gaming", brand: "Rapoo", mkt: 690000, disc: 0.15, grp: "A", stock: 8, need: "", why: "Bộ cơ bản đi kèm PC mới.", spec: {} },
+    // ---- Model tham chiếu đã ngừng bán (chỉ khai báo "Đã có") ----
+    { id: "XC9", cat: "cpu", n: "Intel Core i5-9400F (đã ngừng bán)", ref: true, socket: "LGA1151", w: 65, igpu: false, box: true, mkt: 0 },
+    { id: "XC5", cat: "cpu", n: "AMD Ryzen 5 5600 (đã ngừng bán)", ref: true, socket: "AM4", w: 76, igpu: false, box: true, mkt: 0 },
+    { id: "XM9", cat: "main", n: "Mainboard B365M DDR4 (đã ngừng bán)", ref: true, socket: "LGA1151", ram: "DDR4", slots: 2, maxRam: 64, bus: 2666, ff: "mATX", m2: 1, sata: 4, x1: 1, wifi: false, mkt: 0 },
+    { id: "XM5", cat: "main", n: "Mainboard B450M DDR4 (đã ngừng bán)", ref: true, socket: "AM4", ram: "DDR4", slots: 4, maxRam: 64, bus: 3200, ff: "mATX", m2: 1, sata: 4, x1: 1, wifi: false, mkt: 0 },
+    { id: "XR8", cat: "ram", n: "RAM DDR4 8GB 2666 (đã ngừng bán)", ref: true, type: "DDR4", gb: 8, bus: 2666, mkt: 0 },
+    { id: "XG6", cat: "vga", n: "GeForce GTX 1660 Super (đã ngừng bán)", ref: true, w: 125, len: 230, pin8: 1, p16: false, tier: 1, mkt: 0 },
+    { id: "XS2", cat: "ssd", n: "SSD SATA 240GB cũ", ref: true, iface: "SATA", form: "2.5", gb: 240, mkt: 0 },
+    { id: "XP4", cat: "psu", n: "Nguồn 450W cũ (đã ngừng bán)", ref: true, w: 450, pin8: 1, p16: false, mkt: 0 },
+    { id: "XK8", cat: "case", n: "Case mATX cũ (VGA tối đa 250 mm)", ref: true, ff: ["mATX", "ITX"], gpu: 250, cool: 150, rad: 0, fans: 3, pre: 1, color: "Đen", mkt: 0 },
   ];
+  P.forEach((p) => { if (!p.ref) { p.price = sell(p.mkt); p.cost = Math.round(p.mkt * (1 - p.disc)); } });
+
+  // 4 combo theo sheet "Bảng giá SP" (giá gồm VAT, chưa gồm lắp ráp). qty RAM = số thanh.
+  const COMBOS = [
+    { key: "esports", name: "BX Esports", use: "Esports (LoL, Valorant, CS2), học tập · 1080p", share: 35, parts: { main: "M01", cpu: "C01", ram: "R01", ramQty: 1, vga: "G01", ssd: "S01", cool: "T01", case: "K01", psu: "P01" }, comp: null },
+    { key: "gamer", name: "BX Gamer", use: "Game AAA 1080p thiết lập cao, stream nhẹ", share: 40, parts: { main: "M02", cpu: "C01", ram: "R01", ramQty: 1, vga: "G02", ssd: "S01", cool: "T01", case: "K02", psu: "P01" }, comp: { price: 27690000, src: "GEARVN PC GVN i5-12400F/RTX 5060 (Main H), 20/10/2026" } },
+    { key: "creator", name: "BX Creator", use: "Đồ họa, dựng video, AI nhẹ · 1440p", share: 17, parts: { main: "M03", cpu: "C02", ram: "R01", ramQty: 2, vga: "G03", ssd: "S02", cool: "T02", case: "K02", psu: "P01" }, comp: { price: 39150000, src: "GEARVN PC GVN i5-12400F/RTX 5060 Ti, 20/10/2026 (CPU yếu hơn, 16GB)" } },
+    { key: "pro", name: "BX Pro", use: "Game 1440p thiết lập cao, render", share: 8, parts: { main: "M03", cpu: "C02", ram: "R01", ramQty: 2, vga: "G04", ssd: "S02", cool: "T02", case: "K02", psu: "P02" }, comp: null },
+  ];
+  // Linh kiện tùy chọn khai báo cho từng combo (UC18 – SC36)
+  const COMBO_OPTS = { esports: ["R01", "S03", "F01", "W01", "D01", "KB1"], gamer: ["R01", "S02", "F01", "W01", "D01", "KB1"], creator: ["R01", "S01", "F01", "D01", "KB1"], pro: ["R01", "S01", "F01", "D01", "KB1"] };
+
+  // Bảng giá dịch vụ (v3 mục 6)
+  const FEES = { asm: 300000, asmOwn: 400000, clean: 250000, care: 450000, homeIn: 100000, homeOut: 150000, depositRate: 0.3, asmCost: 20000, cleanCost: 40000, careCost: 100000 };
+
   const APPS = {
     game: ["Valorant", "CS2", "Liên Minh Huyền Thoại", "Black Myth: Wukong", "GTA V", "PUBG"],
     esports: ["Valorant", "CS2", "Liên Minh Huyền Thoại", "FC Online", "PUBG"],
@@ -50,48 +91,27 @@ window.BX = (function () {
     study: ["Visual Studio Code", "Office", "Android Studio", "Valorant"],
   };
   const FPS = { "Valorant": [260, 330, 400, 450], "CS2": [170, 230, 290, 340], "Liên Minh Huyền Thoại": [240, 300, 340, 360], "Black Myth: Wukong": [45, 60, 78, 95], "GTA V": [120, 150, 175, 200], "PUBG": [110, 145, 180, 210], "FC Online": [200, 240, 270, 290] };
-  const ORDER_STEPS = [["Chờ thanh toán", "Giữ hàng tạm 30 phút"], ["Đã đặt cọc", "Đối soát VietQR tự động"], ["Đã xác nhận", "Tư vấn gọi xác nhận, chấm rủi ro"], ["Chờ hàng / giữ hàng", "Giữ serial; CPU/VGA nhập theo đơn"], ["Đang lắp ráp", "Theo checklist, chụp ảnh đi dây"], ["Burn-in & QC", "MemTest86, FurMark, Cinebench R23"], ["Đang giao", "Đóng gói chống sốc, vận đơn"], ["Hoàn tất", "Kích hoạt bảo hành theo serial"]];
-  const ORDERS = [
-    { id: "BX-2702-0118", d: "18/02/2027", cust: "Nguyễn Minh Anh", phone: "0912 345 678", item: "BX Gamer", total: 25340000, paid: 7600000, step: 5, ship: "Nội thành HN", risk: 12, jit: ["G02"], tech: "Trần Đức Huy" },
-    { id: "BX-2702-0117", d: "18/02/2027", cust: "Lê Quang Thắng", phone: "0987 222 019", item: "BX Creator", total: 39850000, paid: 11960000, step: 3, ship: "Liên tỉnh – Hải Phòng", risk: 35, jit: ["C02", "G03"], tech: "" },
-    { id: "BX-2702-0116", d: "17/02/2027", cust: "Phạm Thu Trang", phone: "0903 556 120", item: "BX Esports", total: 21260000, paid: 21260000, step: 4, ship: "Nội thành HN", risk: 5, jit: [], tech: "Trần Đức Huy" },
-    { id: "BX-2702-0115", d: "17/02/2027", cust: "Đỗ Hoàng Nam", phone: "0868 441 902", item: "BX Pro", total: 43820000, paid: 13150000, step: 2, ship: "Nội thành HN", risk: 64, jit: ["C02", "G04"], tech: "" },
-    { id: "BX-2702-0114", d: "16/02/2027", cust: "Vũ Khánh Linh", phone: "0977 120 334", item: "RAM DDR4 16GB 3200", total: 2850000, paid: 2850000, step: 6, ship: "Liên tỉnh – Thanh Hóa", risk: 3, jit: [], tech: "" },
-    { id: "BX-2702-0112", d: "15/02/2027", cust: "Bùi Tiến Dũng", phone: "0934 781 556", item: "BX Gamer", total: 25830000, paid: 25830000, step: 7, ship: "Nội thành HN", risk: 8, jit: [], tech: "Ngô Văn Long" },
-    { id: "BX-2702-0110", d: "14/02/2027", cust: "Hoàng Bảo Ngọc", phone: "0915 909 221", item: "Lắp ráp hộ", total: 300000, paid: 0, step: 4, ship: "Tại xưởng", risk: 2, jit: [], tech: "Ngô Văn Long" },
-  ];
-  const LEADS = [
-    { id: "L-0931", name: "Trịnh Văn Khoa", src: "TikTok – video 'Build PC 25 triệu'", need: "Gaming, 25 tr, case trắng", st: "Mới", ago: "12 phút" },
-    { id: "L-0930", name: "Ngô Thị Hà", src: "Booth ĐH Bách khoa", need: "Đồ họa, 35–40 tr", st: "Đang tư vấn", ago: "1 giờ" },
-    { id: "L-0928", name: "Phan Đức Mạnh", src: "Google Search Ads", need: "Valorant 240Hz, 20 tr", st: "Đã gửi báo giá", ago: "3 giờ" },
-    { id: "L-0925", name: "Lý Minh Tuấn", src: "Giới thiệu – mã TUAN200", need: "Nâng cấp VGA", st: "Đã chốt", ago: "Hôm qua" },
-    { id: "L-0921", name: "Đặng Hải Yến", src: "Livestream 'Build theo ngân sách'", need: "PC học lập trình, 18 tr", st: "Mất", ago: "2 ngày" },
-  ];
-  const SUPPLIERS = [
-    { id: "NCC01", name: "Nhà phân phối A (Hà Nội)", grp: "CPU, VGA, mainboard", disc: "5–8%", debt: "Chưa có (thanh toán ngay)", lead: "Trong ngày", rma: "1 đổi 1 trong 7 ngày", score: 4.6 },
-    { id: "NCC02", name: "Nhà phân phối B (Hà Nội)", grp: "RAM, SSD", disc: "7–8%", debt: "Đàm phán 7 ngày từ T5", lead: "1 ngày", rma: "1 đổi 1 trong 30 ngày", score: 4.3 },
-    { id: "NCC03", name: "Nhà phân phối C (Hà Nội)", grp: "Nguồn, case, tản nhiệt", disc: "12–15%", debt: "15 ngày", lead: "1–2 ngày", rma: "Bảo hành tại hãng", score: 4.1 },
-    { id: "NCC04", name: "Nhà phân phối D (TP.HCM)", grp: "VGA cao cấp (dự phòng)", disc: "4–6%", debt: "Không", lead: "2–3 ngày", rma: "1 đổi 1 trong 7 ngày", score: 3.8 },
-  ];
+
+  // Trạng thái đơn thống nhất (v3 mục 14.6)
+  const STATUSES = ["Mới", "Đã xác nhận", "Chờ hàng", "Lắp ráp & QC", "Đóng gói", "Đang giao / Chờ nhận", "Hoàn tất", "Đã hủy"];
+
+  // Kế hoạch 12 tháng (sheet "Doanh thu 12T" và "P&L – Dòng tiền", kịch bản cơ sở v3)
   const PLAN = {
     months: ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"],
-    pc: [8, 12, 25, 32, 38, 42, 50, 62, 66, 62, 72, 80],
-    net: [243.4, 349.0, 693.1, 882.3, 1041.8, 1148.3, 1365.6, 1684.5, 1791.3, 1690.5, 1956.4, 2169.5],
-    ebt: [-65.7, -78.7, -77.4, -55.1, -40.7, -21.9, -12.7, -18.3, -4.3, -1.0, 10.0, 42.5],
+    pc: [12, 16, 20, 24, 27, 30, 32, 35, 38, 40, 44, 48],
+    net: [359.2, 467.8, 577.4, 689.4, 771.5, 853.7, 908.6, 990.8, 1073.1, 1128.1, 1237.7, 1347.4],
+    ebt: [-92.7, -59.7, -47.2, -33.0, -23.7, -14.3, -8.0, 1.4, 10.8, 17.2, 29.7, 42.2],
+    kpi: { margin: 13.9, marginAlert: 13, breakeven: 35, cac: 390000, visitLead: 3, leadOrder: 20, asm: 85, care: 20 },
   };
-  const RULES = [
-    ["R01", "Socket CPU = socket mainboard", "Chặn", "cpu.socket == main.socket"],
-    ["R02", "Chuẩn RAM = chuẩn mainboard hỗ trợ", "Chặn", "ram.type == main.ram"],
-    ["R03", "Form factor mainboard nằm trong danh sách case hỗ trợ", "Chặn", "case.ff ∋ main.ff"],
-    ["R04", "Chiều dài VGA ≤ khoảng trống VGA của case", "Chặn", "vga.len ≤ case.gpu"],
-    ["R05", "Chiều cao tản ≤ giới hạn tản của case", "Chặn", "cool.h ≤ case.cool"],
-    ["R06", "Công suất nguồn ≥ 1,3 × (CPU + VGA + 75 W)", "Cảnh báo / chặn nếu < 1,1×", "psu.w ≥ 1.3 × load"],
-    ["R07", "Khả năng tản ≥ điện năng tối đa của CPU", "Cảnh báo", "cool.tdp ≥ cpu.w"],
-    ["R08", "CPU bản Tray phải đi kèm tản nhiệt", "Chặn", "cpu.tray → cool ≠ null"],
-    ["R09", "Đầu cấp nguồn VGA (8-pin/12V-2x6) có trên nguồn", "Chặn", "psu.conn ⊇ vga.conn"],
-    ["R10", "Số SSD M.2 ≤ số khe M.2 mainboard", "Chặn", "count(ssd.m2) ≤ main.m2"],
-    ["R11", "Dung lượng RAM ≤ tối đa mainboard", "Chặn", "ram.gb ≤ main.maxRam"],
-    ["R12", "Màu case khớp sở thích khách", "Gợi ý", "case.color == need.color"],
-  ];
-  return { C, SLOTS, TIERS, APPS, FPS, ORDER_STEPS, ORDERS, LEADS, SUPPLIERS, PLAN, RULES, sell, MARKUP };
+
+  const ROLES = {
+    "Quản lý": ["*"],
+    "Nhân viên bán hàng": ["pos", "orders", "order", "leads", "quote"],
+    "Nhân viên tư vấn": ["leads", "quote", "pos", "orders", "order"],
+    "Thủ kho": ["stock", "stockdoc", "po", "suppliers", "packing", "orders", "order"],
+    "Kỹ thuật viên": ["workshop", "ticket", "packing", "requests", "rma"],
+    "Quản trị viên": ["users"],
+  };
+
+  return { P, CAT, ORDER, COMBOS, COMBO_OPTS, FEES, APPS, FPS, STATUSES, PLAN, ROLES, sell, MARKUP };
 })();
