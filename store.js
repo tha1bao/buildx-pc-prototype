@@ -70,7 +70,10 @@
   add("SC02", "profile", "Hồ sơ & sổ địa chỉ", "UC01", "store", () => {
     if (!S.user) return needLogin("SC02", "UC01");
     const u = S.user, t = CUST_TIERS[u.tier] || CUST_TIERS.standard;
-    return `<div class="wrap page" style="max-width:880px"><div class="row between"><h1>Hồ sơ & Phân quyền thành viên</h1>${tag("SC02", "UC01")}</div>
+    const spentNum = typeof u.spent === "number" ? u.spent : 8500000;
+    const vipGoal = 50000000;
+    const progressPct = Math.min(100, Math.round((spentNum / vipGoal) * 100));
+    return `<div class="wrap page" style="max-width:880px"><div class="row between"><h1>Hồ sơ thành viên</h1>${tag("SC02", "UC01")}</div>
     <div class="panel stack" style="margin-top:10px;background:var(--card);border-left:4px solid var(--${t.color})">
       <div class="row between">
         <div>
@@ -80,20 +83,27 @@
           </h2>
         </div>
         <div class="row small">
-          <label><b>Đổi hạng demo:</b>
-            <select id="sw-tier" style="width:auto;margin-left:6px;padding:4px 8px">
-              ${Object.values(CUST_TIERS).map((x) => `<option value="${x.key}" ${x.key === u.tier ? "selected" : ""}>${x.name} (${x.badge})</option>`).join("")}
-            </select>
-          </label>
+          <span class="pill ${t.color}">Trạng thái: Hoạt động</span>
         </div>
       </div>
+
       <div class="grid3" style="margin-top:4px">
         <div class="kpi"><div class="lbl">Điểm tích lũy</div><div class="v">${(u.points || 0).toLocaleString("vi-VN")} điểm</div></div>
-        <div class="kpi"><div class="lbl">Tổng chi tiêu</div><div class="v">${typeof u.spent === "number" ? fmt(u.spent) : (u.spent || "0đ")}</div></div>
-        <div class="kpi"><div class="lbl">Mức chiết khấu tự động</div><div class="v" style="color:var(--${t.color})">${t.discRate ? (t.discRate * 100) + "%" : "0%"}</div></div>
+        <div class="kpi"><div class="lbl">Tổng chi tiêu tích lũy</div><div class="v">${fmt(spentNum)}</div></div>
+        <div class="kpi"><div class="lbl">Chiết khấu đặc quyền</div><div class="v" style="color:var(--${t.color})">${t.discRate ? (t.discRate * 100) + "%" : "0%"}</div></div>
       </div>
+
+      ${u.tier === "standard" ? `
+      <div class="panel" style="background:var(--bg);padding:10px 14px">
+        <div class="row between small"><span><b>Tiến độ thăng hạng VIP Gamer Pro (mốc 50 triệu)</b></span><span>${fmt(spentNum)} / ${fmt(vipGoal)} (${progressPct}%)</span></div>
+        <div style="background:var(--line);height:8px;border-radius:4px;overflow:hidden;margin-top:6px"><div style="background:var(--accent);width:${progressPct}%;height:100%"></div></div>
+        <p class="xs muted" style="margin:6px 0 0">Chi tiêu thêm ${fmt(Math.max(0, vipGoal - spentNum))} để tự động được nâng cấp lên hạng VIP (hưởng chiết khấu tự động 2% và ưu tiên xưởng).</p>
+      </div>` : u.tier === "vip" ? `
+      <div class="notice ok small" style="margin:4px 0">🌟 <b>Tài khoản VIP cao cấp:</b> Bạn đang hưởng mức ưu đãi đặc quyền tối đa dành cho khách hàng cá nhân (giảm trực tiếp 2% toàn bộ đơn hàng và ưu tiên lắp ráp hỏa tốc).</div>` : `
+      <div class="notice ok small" style="margin:4px 0">🏢 <b>Tài khoản Doanh nghiệp B2B:</b> Được cấp quyền bởi phòng Kinh doanh BuildX với bảng giá sỉ chiết khấu 5%, xuất hóa đơn VAT và hạn mức công nợ theo hợp đồng.</div>`}
+
       <div>
-        <b class="small">Đặc quyền phân quyền của bạn:</b>
+        <b class="small">Quyền lợi dành cho hạng tài khoản của bạn:</b>
         <ul class="small" style="margin:4px 0 0;padding-left:18px">
           ${t.perks.map((p) => `<li>${esc(p)}</li>`).join("")}
         </ul>
@@ -125,15 +135,6 @@
       <div class="row" style="margin-top:14px"><a class="btn sm ghost" href="#/saved">Cấu hình đã lưu (${S.saved.length})</a><a class="btn sm ghost" href="#/orders-me">Đơn của tôi</a></div></div></div></div>`;
   }, () => {
     if (!S.user) return;
-    const sw = $("#sw-tier");
-    if (sw) sw.onchange = () => {
-      S.user.tier = sw.value;
-      if (sw.value === "b2b" && !S.user.company) {
-        S.user.company = { name: S.user.name, taxId: "0109876543", addr: S.user.addrs[0] ? S.user.addrs[0].text : "Hà Nội" };
-      }
-      toast("Đã chuyển sang hạng: " + CUST_TIERS[sw.value].name);
-      rerender();
-    };
     $("#sv").onclick = () => {
       S.user.name = $("#pn").value;
       S.user.email = $("#pe").value;
