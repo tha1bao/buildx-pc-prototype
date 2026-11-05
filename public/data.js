@@ -3,7 +3,11 @@
 // Giá vốn = giá thị trường × (1 − chiết khấu NPP giả định).
 // Mã gắn demo:true là dữ liệu bổ sung để thử luật tương thích, giá minh họa (không có trong sheet Linh kiện).
 // Mã gắn ref:true là model tham chiếu đã ngừng bán, chỉ dùng để khai báo "Đã có" và nâng cấp.
-window.BX = (function () {
+(function (root, factory) {
+  const BX = factory();
+  if (typeof module === "object" && module.exports) module.exports = BX; // máy chủ (Node) dùng chung dữ liệu và giá
+  else root.BX = BX;
+})(typeof self !== "undefined" ? self : this, function () {
   const MARKUP = 0.08;
   const sell = (m) => Math.round((m * (1 + MARKUP)) / 10000) * 10000;
 
@@ -209,5 +213,17 @@ window.BX = (function () {
     "Quản trị viên": ["users"],
   };
 
-  return { P, CAT, ORDER, COMBOS, COMBO_OPTS, FEES, APPS, FPS, STATUSES, PLAN, ROLES, CUST_TIERS, PRESET_CUSTOMERS, sell, MARKUP };
-})();
+  // Bộ cấu hình kiểm thử luật tương thích (SC35): [luật, kỳ vọng, mô tả, cấu hình]
+  const RULE_TESTS = [
+    ["R1", "ok", "i5-12400F + H610M (LGA1700)", { cpu: "C01", main: "M01" }], ["R1", "bad", "Ryzen 7500F (AM5) + H610M (LGA1700)", { cpu: "C04", main: "M01" }],
+    ["R2", "ok", "H610M + 2 thanh DDR4 16GB", { main: "M01", ram: "R01x2" }], ["R2", "bad", "H610M (DDR4) + RAM DDR5", { main: "M01", ram: "R02" }], ["R2", "bad", "H610M 2 khe + 3 thanh RAM", { main: "M01", ram: "R01x3" }], ["R2", "warn", "H610M + RAM bus 3600", { main: "M01", ram: "R04" }],
+    ["R3", "ok", "B760M (mATX) + case mATX", { main: "M02", case: "K01" }], ["R3", "bad", "B760 ATX + case chỉ nhận mATX", { main: "M06", case: "K01" }],
+    ["R4", "ok", "RTX 5060 (240 mm) + case 300 mm", { vga: "G02", case: "K01" }], ["R4", "bad", "RTX 5070 Ti (330 mm) + case 300 mm", { vga: "G05", case: "K01" }],
+    ["R5", "ok", "Hyper 212 + i5-12400F + case 155 mm", { cpu: "C01", cool: "T01", case: "K01" }], ["R5", "bad", "Tản chỉ ngàm LGA1700 + Ryzen AM5", { cpu: "C04", cool: "T03" }], ["R5", "bad", "Tản 157 mm + case 155 mm", { cool: "T02", case: "K01" }], ["R5", "bad", "AIO 240 + case không có chỗ radiator", { cool: "T04", case: "K03" }], ["R5", "warn", "i5-14600KF 181W + tản 150W", { cpu: "C02", cool: "T01" }],
+    ["R6", "ok", "i5-12400F + RTX 5060 + 650W", { cpu: "C01", vga: "G02", psu: "P01" }], ["R6", "warn", "i5-14600KF + RTX 5070 + 650W (dư tải < 30%)", { cpu: "C02", vga: "G04", psu: "P01" }], ["R6", "bad", "RTX 5070 Ti cần 3 đầu 8-pin + nguồn 2 đầu", { cpu: "C01", vga: "G05", psu: "P01" }], ["R6", "bad", "i5-14600KF + RTX 5070 Ti + 550W (dưới tải)", { cpu: "C02", vga: "G05", psu: "P03" }],
+    ["R7", "ok", "B760M 2 khe M.2 + 2 SSD NVMe", { main: "M02", ssd: "S01", extras: ["S02"] }], ["R7", "bad", "H610M 1 khe M.2 + 2 SSD NVMe", { main: "M01", ssd: "S01", extras: ["S02"] }],
+    ["R8", "ok", "B760M có PCIe x1 + card WiFi", { main: "M02", extras: ["W01"] }], ["R8", "bad", "Mini-ITX không có PCIe x1 + card WiFi", { main: "M05", extras: ["W01"] }], ["R8", "bad", "Case Mini-ITX còn 1 vị trí + bộ 3 quạt", { case: "K03", extras: ["F01"] }],
+  ];
+
+  return { P, CAT, ORDER, COMBOS, COMBO_OPTS, FEES, APPS, FPS, STATUSES, PLAN, ROLES, RULE_TESTS, CUST_TIERS, PRESET_CUSTOMERS, sell, MARKUP };
+});
