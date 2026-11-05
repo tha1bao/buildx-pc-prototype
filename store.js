@@ -1,7 +1,7 @@
 // BuildX PC – 21 màn hình phía khách hàng (SC01–SC21, UC01–UC11)
 (function () {
   "use strict";
-  const { COMBOS, COMBO_OPTS, FEES, APPS, FPS, ORDER, CAT, STATUSES } = window.BX;
+  const { COMBOS, COMBO_OPTS, FEES, APPS, FPS, ORDER, CAT, STATUSES, CUST_TIERS, PRESET_CUSTOMERS } = window.BX;
   const E = window.BXE, S = E.S, A = window.BXA;
   const { $, $$, fmt, esc, toast, tag, stPill, payPill, checkHtml, availPill, add, rerender } = A;
   const byId = E.byId;
@@ -15,19 +15,52 @@
 
   // ================= SC01 – Đăng nhập / đăng ký =================
   add("SC01", "login", "Đăng nhập / đăng ký", "UC01", "store", () => `
-  <div class="wrap page" style="max-width:480px"><div class="panel" id="lg">
-    <h1>Đăng nhập</h1><p class="muted small">Nhập số điện thoại để nhận mã OTP. Số mới sẽ được tạo tài khoản. ${tag("SC01", "UC01")}</p>
-    <form id="f1"><div class="field"><label for="ph">Số điện thoại</label><input id="ph" type="tel" value="0912 345 678" required></div><button class="btn" type="submit">Gửi mã OTP</button></form>
-    <p class="small" style="margin-top:14px"><a href="#/cart" id="guest">Tiếp tục với tư cách khách</a> · khách vãng lai vẫn đặt hàng được.</p>
-    <p class="xs muted">Đăng nhập bằng OTP nên không có mật khẩu để quên. Tài khoản nhân viên dùng mật khẩu, lưu bằng hàm băm (UC22).</p>
+  <div class="wrap page" style="max-width:540px"><div class="panel" id="lg">
+    <div class="row between"><h1>Đăng nhập khách hàng</h1>${tag("SC01", "UC01")}</div>
+    <p class="muted small">Hệ thống phân quyền 3 hạng tài khoản khách hàng với các chính sách giá & đặc quyền riêng biệt.</p>
+    
+    <div class="panel stack" style="background:var(--bg);border:1px dashed var(--accent);margin:14px 0;padding:12px">
+      <span class="lbl" style="color:var(--accent)">★ Đăng nhập nhanh để thử phân quyền tài khoản (Demo)</span>
+      <div class="stack" style="gap:8px">
+        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0912 345 678">
+          <div><b style="color:var(--accent)">Nguyễn Minh Anh</b> · <span class="pill acc xs">VIP −2%</span><br><span class="xs muted">Chiết khấu tự động 2%, ưu tiên xưởng QC hỏa tốc, tích 1.250 điểm</span></div>
+          <span class="btn sm">Vào demo →</span>
+        </button>
+        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0988 999 888">
+          <div><b style="color:var(--ok)">Cty CP Công Nghệ NextGen</b> · <span class="pill ok xs">B2B −5%</span><br><span class="xs muted">Bảng giá sỉ −5%, xuất HĐ GTGT (VAT), thanh toán công nợ 30 ngày</span></div>
+          <span class="btn sm">Vào demo →</span>
+        </button>
+        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0905 112 233">
+          <div><b>Trịnh Văn Khoa</b> · <span class="pill info xs">Member</span><br><span class="xs muted">Thành viên Tiêu chuẩn, tích lũy 1%, lưu cấu hình PC</span></div>
+          <span class="btn sm">Vào demo →</span>
+        </button>
+      </div>
+    </div>
+
+    <details style="margin-top:10px">
+      <summary class="small">Hoặc đăng nhập bằng số điện thoại bất kỳ (gửi OTP)</summary>
+      <form id="f1" style="margin-top:10px"><div class="field"><label for="ph">Số điện thoại</label><input id="ph" type="tel" value="0912 345 678" required></div><button class="btn" type="submit">Gửi mã OTP</button></form>
+    </details>
+    <p class="small" style="margin-top:14px"><a href="#/cart" id="guest">Tiếp tục với tư cách khách vãng lai</a> · không hưởng chiết khấu hạng thành viên.</p>
   </div></div>`, () => {
-    $("#f1").onsubmit = (e) => {
+    $$("[data-quick]").forEach((b) => (b.onclick = () => {
+      const ph = b.dataset.quick;
+      const found = PRESET_CUSTOMERS.find((x) => x.phone === ph);
+      if (found) {
+        S.user = JSON.parse(JSON.stringify(found));
+        toast(`Đã đăng nhập: ${S.user.name} (${CUST_TIERS[S.user.tier].name})`);
+        go("#/profile");
+      }
+    }));
+    const f1 = $("#f1");
+    if (f1) f1.onsubmit = (e) => {
       e.preventDefault(); const ph = $("#ph").value.trim();
       $("#lg").innerHTML = `<h1>Nhập mã OTP</h1><p class="muted small">Đã gửi mã 6 số tới ${esc(ph)} (demo: 123456).</p><form id="f2"><div class="otp">${[1, 2, 3, 4, 5, 6].map((i) => `<input inputmode="numeric" maxlength="1" value="${i}" aria-label="Số ${i}">`).join("")}</div>${ph.replace(/\s/g, "") === "0912345678" ? "" : `<div class="field" style="margin-top:12px"><label for="nm">Họ tên (tài khoản mới)</label><input id="nm" type="text" required></div>`}<button class="btn" type="submit" style="margin-top:12px">Xác thực</button></form>`;
       $("#f2").onsubmit = (ev) => {
         ev.preventDefault();
         if ($$(".otp input").map((i) => i.value).join("") !== "123456") return toast("Mã OTP không đúng");
-        S.user = ph.replace(/\s/g, "") === "0912345678" ? { name: "Nguyễn Minh Anh", phone: "0912 345 678", email: "minhanh@gmail.com", addrs: [{ label: "Nhà", text: "18 Hoàng Quốc Việt, Cầu Giấy", def: true }, { label: "Công ty", text: "Tòa nhà FPT, 17 Duy Tân, Cầu Giấy", def: false }], consent: { zalo: true, email: false } } : { name: $("#nm").value, phone: ph, email: "", addrs: [], consent: { zalo: false, email: false } };
+        const found = PRESET_CUSTOMERS.find((x) => x.phone.replace(/\s/g, "") === ph.replace(/\s/g, ""));
+        S.user = found ? JSON.parse(JSON.stringify(found)) : { name: $("#nm").value, phone: ph, email: "", tier: "standard", points: 0, spent: 0, addrs: [], consent: { zalo: false, email: false } };
         toast("Đăng nhập thành công"); go("#/profile");
       };
     };
@@ -36,23 +69,80 @@
   // ================= SC02 – Hồ sơ & sổ địa chỉ =================
   add("SC02", "profile", "Hồ sơ & sổ địa chỉ", "UC01", "store", () => {
     if (!S.user) return needLogin("SC02", "UC01");
-    const u = S.user;
-    return `<div class="wrap page" style="max-width:820px"><h1>Hồ sơ của bạn</h1><p class="muted small">${tag("SC02", "UC01")}</p>
-    <div class="grid2" style="margin-top:12px"><div class="panel"><h2>Thông tin</h2>
-      <div class="field"><label for="pn">Họ tên</label><input id="pn" type="text" value="${esc(u.name)}"></div>
+    const u = S.user, t = CUST_TIERS[u.tier] || CUST_TIERS.standard;
+    return `<div class="wrap page" style="max-width:880px"><div class="row between"><h1>Hồ sơ & Phân quyền thành viên</h1>${tag("SC02", "UC01")}</div>
+    <div class="panel stack" style="margin-top:10px;background:var(--card);border-left:4px solid var(--${t.color})">
+      <div class="row between">
+        <div>
+          <span class="lbl">Hạng tài khoản khách hàng</span>
+          <h2 style="margin:2px 0;display:flex;align-items:center;gap:8px">
+            ${esc(t.name)} <span class="pill ${t.color}">${t.badge}</span>
+          </h2>
+        </div>
+        <div class="row small">
+          <label><b>Đổi hạng demo:</b>
+            <select id="sw-tier" style="width:auto;margin-left:6px;padding:4px 8px">
+              ${Object.values(CUST_TIERS).map((x) => `<option value="${x.key}" ${x.key === u.tier ? "selected" : ""}>${x.name} (${x.badge})</option>`).join("")}
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:4px">
+        <div class="kpi"><div class="lbl">Điểm tích lũy</div><div class="v">${(u.points || 0).toLocaleString("vi-VN")} điểm</div></div>
+        <div class="kpi"><div class="lbl">Tổng chi tiêu</div><div class="v">${typeof u.spent === "number" ? fmt(u.spent) : (u.spent || "0đ")}</div></div>
+        <div class="kpi"><div class="lbl">Mức chiết khấu tự động</div><div class="v" style="color:var(--${t.color})">${t.discRate ? (t.discRate * 100) + "%" : "0%"}</div></div>
+      </div>
+      <div>
+        <b class="small">Đặc quyền phân quyền của bạn:</b>
+        <ul class="small" style="margin:4px 0 0;padding-left:18px">
+          ${t.perks.map((p) => `<li>${esc(p)}</li>`).join("")}
+        </ul>
+      </div>
+    </div>
+
+    ${u.tier === "b2b" ? `
+    <div class="panel stack" style="margin-top:12px;border:1px solid var(--ok)">
+      <div class="row between"><h3 style="margin:0;color:var(--ok)">Thông tin Xuất hóa đơn GTGT (VAT) & Doanh nghiệp</h3><span class="pill ok">Đã xác thực B2B</span></div>
+      <div class="grid2">
+        <div class="field"><label>Tên công ty / Tổ chức</label><input type="text" id="b2b-comp" value="${esc((u.company && u.company.name) || u.name)}"></div>
+        <div class="field"><label>Mã số thuế (MST)</label><input type="text" id="b2b-tax" value="${esc((u.company && u.company.taxId) || "0109876543")}"></div>
+      </div>
+      <div class="field"><label>Địa chỉ xuất hóa đơn</label><input type="text" id="b2b-addr" value="${esc((u.company && u.company.addr) || (u.addrs[0] ? u.addrs[0].text : ''))}"></div>
+      <p class="xs muted">Đơn hàng của tài khoản B2B sẽ tự động đính kèm hóa đơn VAT và mở quyền thanh toán công nợ 15–30 ngày.</p>
+    </div>` : ""}
+
+    <div class="grid2" style="margin-top:12px"><div class="panel"><h2>Thông tin tài khoản</h2>
+      <div class="field"><label for="pn">Họ tên / Đại diện</label><input id="pn" type="text" value="${esc(u.name)}"></div>
       <div class="field"><label>Số điện thoại</label><input type="tel" value="${esc(u.phone)}" disabled></div>
       <div class="field"><label for="pe">Email</label><input id="pe" type="email" value="${esc(u.email)}"></div>
       <h3 style="margin-top:6px">Nhận thông báo</h3>
-      <label class="row small"><input type="checkbox" id="cz" ${u.consent.zalo ? "checked" : ""}> Nhắc vệ sinh, bảo hành qua Zalo</label>
-      <label class="row small"><input type="checkbox" id="ce" ${u.consent.email ? "checked" : ""}> Ưu đãi qua email</label>
+      <label class="row small"><input type="checkbox" id="cz" ${u.consent && u.consent.zalo ? "checked" : ""}> Nhắc vệ sinh, bảo hành qua Zalo</label>
+      <label class="row small"><input type="checkbox" id="ce" ${u.consent && u.consent.email ? "checked" : ""}> Ưu đãi qua email</label>
       <p class="xs muted">BuildX chỉ gửi thông báo khi bạn đồng ý (v3 mục 12).</p>
-      <div class="row"><button class="btn" type="button" id="sv">Lưu</button><button class="btn plain" type="button" id="lo">Đăng xuất</button></div></div>
-    <div class="panel"><h2>Sổ địa chỉ</h2><div class="stack" style="gap:8px">${u.addrs.map((a, i) => `<div class="row between" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px"><span><b>${esc(a.label)}</b> ${a.def ? '<span class="pill acc">Mặc định</span>' : ""}<br><span class="small">${esc(a.text)}</span></span><span class="row">${a.def ? "" : `<button class="btn sm plain" type="button" data-def="${i}">Đặt mặc định</button>`}<button class="btn sm plain" type="button" data-del="${i}">Xóa</button></span></div>`).join("") || '<p class="small muted">Chưa có địa chỉ.</p>'}</div>
-      <form id="fa" style="margin-top:12px"><div class="grid2"><div class="field"><label for="al">Tên gợi nhớ</label><input id="al" type="text" placeholder="Nhà, công ty…" required></div><div class="field"><label for="at">Địa chỉ</label><input id="at" type="text" required></div></div><button class="btn sm" type="submit">Thêm địa chỉ</button></form>
+      <div class="row"><button class="btn" type="button" id="sv">Lưu thông tin</button><button class="btn plain" type="button" id="lo">Đăng xuất</button></div></div>
+    <div class="panel"><h2>Sổ địa chỉ nhận hàng</h2><div class="stack" style="gap:8px">${u.addrs.map((a, i) => `<div class="row between" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px"><span><b>${esc(a.label)}</b> ${a.def ? '<span class="pill acc">Mặc định</span>' : ""}<br><span class="small">${esc(a.text)}</span></span><span class="row">${a.def ? "" : `<button class="btn sm plain" type="button" data-def="${i}">Đặt mặc định</button>`}<button class="btn sm plain" type="button" data-del="${i}">Xóa</button></span></div>`).join("") || '<p class="small muted">Chưa có địa chỉ.</p>'}</div>
+      <form id="fa" style="margin-top:12px"><div class="grid2"><div class="field"><label for="al">Tên gợi nhớ</label><input id="al" type="text" placeholder="Nhà riêng, Văn phòng…" required></div><div class="field"><label for="at">Địa chỉ</label><input id="at" type="text" required></div></div><button class="btn sm" type="submit">Thêm địa chỉ</button></form>
       <div class="row" style="margin-top:14px"><a class="btn sm ghost" href="#/saved">Cấu hình đã lưu (${S.saved.length})</a><a class="btn sm ghost" href="#/orders-me">Đơn của tôi</a></div></div></div></div>`;
   }, () => {
     if (!S.user) return;
-    $("#sv").onclick = () => { S.user.name = $("#pn").value; S.user.email = $("#pe").value; S.user.consent = { zalo: $("#cz").checked, email: $("#ce").checked }; toast("Đã lưu hồ sơ"); };
+    const sw = $("#sw-tier");
+    if (sw) sw.onchange = () => {
+      S.user.tier = sw.value;
+      if (sw.value === "b2b" && !S.user.company) {
+        S.user.company = { name: S.user.name, taxId: "0109876543", addr: S.user.addrs[0] ? S.user.addrs[0].text : "Hà Nội" };
+      }
+      toast("Đã chuyển sang hạng: " + CUST_TIERS[sw.value].name);
+      rerender();
+    };
+    $("#sv").onclick = () => {
+      S.user.name = $("#pn").value;
+      S.user.email = $("#pe").value;
+      S.user.consent = { zalo: $("#cz").checked, email: $("#ce").checked };
+      if ($("#b2b-comp")) {
+        S.user.company = { name: $("#b2b-comp").value, taxId: $("#b2b-tax").value, addr: $("#b2b-addr").value };
+      }
+      toast("Đã lưu hồ sơ");
+    };
     $("#lo").onclick = () => { S.user = null; go("#/home"); };
     $$("[data-def]").forEach((b) => (b.onclick = () => { S.user.addrs.forEach((a, i) => (a.def = i === +b.dataset.def)); rerender(); }));
     $$("[data-del]").forEach((b) => (b.onclick = () => { S.user.addrs.splice(+b.dataset.del, 1); if (S.user.addrs.length && !S.user.addrs.some((a) => a.def)) S.user.addrs[0].def = true; rerender(); }));
@@ -346,16 +436,22 @@
     const hasPC = S.cart.some((l) => l.type === "pc"), hasCare = S.cart.some((l) => l.code === "care"), sub = cartSub();
     const cp = S.coupon ? E.couponCheck(S.coupon, S.cart) : null;
     const pre = E.preorderItems(S.cart);
+    const uTier = S.user ? CUST_TIERS[S.user.tier] : null;
+    const tierDisc = uTier && uTier.discRate ? Math.round(sub * uTier.discRate / 1000) * 1000 : 0;
+    const cpAmt = cp && cp.ok ? cp.amt : 0;
+    const finalTotal = Math.max(0, sub - cpAmt - tierDisc);
     return `<div class="wrap page"><h1>Giỏ hàng</h1><p class="muted small">Thêm vào giỏ chưa giữ hàng; giá và tồn kho được kiểm tra lại khi đặt hàng. ${tag("SC14", "UC08")}</p>
+    ${uTier && uTier.discRate ? `<div class="notice ok small" style="margin-top:10px"><b>Đặc quyền ${esc(uTier.name)}:</b> Tự động giảm ${uTier.discRate * 100}% (${fmt(tierDisc)}) cho toàn đơn hàng. ${uTier.priorityAsm ? "Ưu tiên xưởng lắp ráp." : ""}</div>` : !S.user ? `<div class="notice small" style="margin-top:10px">Bạn đang mua hàng với tư cách khách vãng lai. <a href="#/login">Đăng nhập tài khoản VIP hoặc B2B</a> để nhận chiết khấu tự động đến 5%.</div>` : ""}
     <div class="side" style="margin-top:12px"><div class="stack">${S.cart.map((l, i) => l.type === "pc" ? `<div class="panel"><div class="row between"><b>${esc(l.title)}</b><span class="price">${fmt(E.cfgPrice(l.cfg))}</span></div><p class="small muted" style="margin:4px 0">${esc(partsList(l.cfg))}</p>
         <div class="row between"><select data-asm="${i}" style="width:auto" aria-label="Lắp ráp"><option value="none" ${l.asm === "none" ? "selected" : ""}>Không lắp ráp</option>${E.canAssemble(l.cfg) || l.src === "upgrade" ? `<option value="shop" ${l.asm === "shop" ? "selected" : ""}>Lắp ráp${l.src === "upgrade" ? " tại cửa hàng" : " + burn-in"}: ${fmt(E.hasOwn(l.cfg) ? FEES.asmOwn : FEES.asm)}</option>` : ""}${l.src === "upgrade" ? `<option value="home" ${l.asm === "home" ? "selected" : ""}>Lắp tận nhà: ${fmt(FEES.asmOwn + FEES.homeIn)}</option>` : ""}</select><span class="row"><span class="price small">${E.asmFee(l) ? "+ " + fmt(E.asmFee(l)) : ""}</span><button class="btn sm plain" type="button" data-rm="${i}">Xóa</button></span></div></div>`
       : l.type === "part" ? `<div class="panel row between"><span><b>${esc(byId(l.id).n)}</b><br>${availPill(byId(l.id))}</span><span class="row"><input type="number" min="1" value="${l.qty}" data-q="${i}" style="width:70px" aria-label="Số lượng"><span class="price">${fmt(E.linePrice(l))}</span><button class="btn sm plain" type="button" data-rm="${i}">Xóa</button></span></div>`
       : `<div class="panel row between"><span><b>${esc(l.title)}</b></span><span class="row"><span class="price">${fmt(l.price)}</span><button class="btn sm plain" type="button" data-rm="${i}">Xóa</button></span></div>`).join("")}
       ${hasPC && !hasCare ? `<div class="panel row between"><span><b>Gói BuildX Care 12 tháng</b><br><span class="small muted">2 lần vệ sinh (mua lẻ 500.000đ), kiểm tra nhiệt độ, hỗ trợ từ xa ưu tiên</span></span><button class="btn sm ghost" type="button" id="care">Thêm ${fmt(FEES.care)}</button></div>` : ""}
       ${pre.length ? `<div class="notice warn small"><b>Hàng cần đặt trước:</b> ${pre.map((x) => esc(byId(x.id).n) + " (thiếu " + x.short + ")").join(", ")}. Sẽ báo thời gian nhập ở bước đặt hàng.</div>` : ""}</div>
-    <div class="panel stack"><span class="lbl">Tạm tính</span><span class="price big">${fmt(sub - (cp && cp.ok ? cp.amt : 0))}</span>
+    <div class="panel stack"><span class="lbl">Tạm tính thanh toán</span><span class="price big">${fmt(finalTotal)}</span>
+      ${tierDisc ? `<div class="row between small" style="color:var(--ok)"><span>Chiết khấu ${esc(uTier.badge)}</span><span>−${fmt(tierDisc)}</span></div>` : ""}
       <div class="row" style="flex-wrap:nowrap"><input id="vc" type="text" placeholder="Mã giảm giá" value="${esc(S.coupon || "")}" aria-label="Mã giảm giá"><button class="btn sm plain" type="button" id="av">Áp dụng</button></div>
-      ${cp ? `<span class="small ${cp.ok ? "" : "muted"}">${cp.ok ? "✓ " : "✗ "}${esc(cp.m)}</span>` : '<span class="xs muted">Thử: MOBAN, HSSV, TUAN200</span>'}
+      ${cp ? `<span class="small ${cp.ok ? "" : "muted"}">${cp.ok ? "✓ " : "✗ "}${esc(cp.m)}</span>` : '<span class="xs muted">Thử mã thêm: MOBAN, HSSV, TUAN200</span>'}
       <a class="btn" href="#/checkout">Tiến hành đặt hàng</a></div></div></div>`;
   }, () => {
     $$("[data-rm]").forEach((b) => (b.onclick = () => { S.cart.splice(+b.dataset.rm, 1); rerender(); }));
@@ -368,23 +464,50 @@
   // ================= SC15 – Thông tin nhận hàng =================
   add("SC15", "checkout", "Thông tin nhận hàng", "UC09", "store", () => {
     if (!S.cart.length) return `<div class="wrap page"><div class="empty">Giỏ hàng trống.</div></div>`;
-    const ck = S.checkout || (S.checkout = { mode: "in", name: S.user ? S.user.name : "", phone: S.user ? S.user.phone : "", addr: S.user && S.user.addrs.length ? S.user.addrs.find((a) => a.def).text : "", agree: false });
+    const ck = S.checkout || (S.checkout = { mode: "in", name: S.user ? S.user.name : "", phone: S.user ? S.user.phone : "", addr: S.user && S.user.addrs.length ? S.user.addrs.find((a) => a.def).text : "", agree: false, vat: S.user && S.user.tier === "b2b" });
     const pre = E.preorderItems(S.cart), dep = pre.some((x) => x.grp === "C");
+    const uTier = S.user ? CUST_TIERS[S.user.tier] : null;
     return `<div class="wrap page" style="max-width:900px"><h1>Thông tin nhận hàng</h1><p class="muted small">Hệ thống kiểm tra lại tồn kho khi đặt. ${tag("SC15", "UC09")}</p>
-    <div class="panel" style="margin-top:12px"><form id="fc"><div class="grid2"><div class="field"><label for="cn">Họ tên</label><input id="cn" type="text" value="${esc(ck.name)}" required></div><div class="field"><label for="cp">Điện thoại</label><input id="cp" type="tel" value="${esc(ck.phone)}" required></div></div>
+    ${uTier && uTier.priorityAsm ? `<div class="notice ok small" style="margin-top:10px">⚡ <b>Đặc quyền ${esc(uTier.name)}:</b> Đơn hàng này được gắn cờ Ưu tiên xưởng lắp ráp & QC hỏa tốc.</div>` : ""}
+    <div class="panel" style="margin-top:12px"><form id="fc"><div class="grid2"><div class="field"><label for="cn">Họ tên / Đại diện</label><input id="cn" type="text" value="${esc(ck.name)}" required></div><div class="field"><label for="cp">Điện thoại</label><input id="cp" type="tel" value="${esc(ck.phone)}" required></div></div>
       <fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0 0 12px"><legend class="lbl">Cách nhận</legend>
         <label class="row small"><input type="radio" name="m" value="in" ${ck.mode === "in" ? "checked" : ""}> Giao nội thành Hà Nội – miễn phí</label>
         <label class="row small"><input type="radio" name="m" value="out" ${ck.mode === "out" ? "checked" : ""}> Giao liên tỉnh – phí theo biểu phí hãng vận chuyển, báo khi xác nhận; PC đóng kiện gỗ</label>
         <label class="row small"><input type="radio" name="m" value="pickup" ${ck.mode === "pickup" ? "checked" : ""}> Nhận tại cửa hàng</label></fieldset>
       ${ck.mode === "pickup" ? "" : `<div class="field"><label for="ca">Địa chỉ</label>${S.user && S.user.addrs.length ? `<select id="cas" style="margin-bottom:6px">${S.user.addrs.map((a) => `<option ${a.text === ck.addr ? "selected" : ""}>${esc(a.text)}</option>`).join("")}<option value="">Địa chỉ khác…</option></select>` : ""}<input id="ca" type="text" value="${esc(ck.addr)}" required></div>`}
-      ${pre.length ? `<div class="notice warn"><b>Thiếu hàng – cần đặt trước</b><ul class="small" style="margin:6px 0">${pre.map((x) => `<li>${esc(byId(x.id).n)}: thiếu ${x.short}, dự kiến nhập ${x.grp === "C" ? "2–3" : "1–2"} ngày${x.grp === "C" ? " (nhóm C – nhập theo đơn)" : ""}</li>`).join("")}</ul>${dep ? `<p class="small">Đơn có hàng nhóm C: cần đặt cọc 30% online trước khi BuildX nhập hàng; không áp dụng COD.</p>` : ""}<label class="row small"><input type="checkbox" id="ag" ${ck.agree ? "checked" : ""}> Tôi đồng ý đặt trước và chờ thời gian nhập hàng</label></div>` : '<div class="notice ok small">Tất cả hàng đều có sẵn.</div>'}
+      
+      <div class="panel stack" style="margin:12px 0;background:var(--card)">
+        <label class="row small"><b><input type="checkbox" id="cvat" ${ck.vat ? "checked" : ""}> Yêu cầu xuất hóa đơn điện tử GTGT (VAT)</b></label>
+        <div id="vat-box" style="${ck.vat ? "" : "display:none"}" class="grid2">
+          <div class="field"><label>Tên công ty</label><input type="text" id="v-name" value="${esc(S.user && S.user.company ? S.user.company.name : "Công ty CP Công Nghệ NextGen")}"></div>
+          <div class="field"><label>Mã số thuế</label><input type="text" id="v-tax" value="${esc(S.user && S.user.company ? S.user.company.taxId : "0109876543")}"></div>
+          <div class="field" style="grid-column:1/-1"><label>Địa chỉ công ty</label><input type="text" id="v-addr" value="${esc(S.user && S.user.company ? S.user.company.addr : "Tầng 8, Keangnam Landmark 72, Nam Từ Liêm, Hà Nội")}"></div>
+        </div>
+      </div>
+
+      ${pre.length ? `<div class="notice warn"><b>Thiếu hàng – cần đặt trước</b><ul class="small" style="margin:6px 0">${pre.map((x) => `<li>${esc(byId(x.id).n)}: thiếu ${x.short}, dự kiến nhập ${x.grp === "C" ? "2–3" : "1–2"} ngày${x.grp === "C" ? " (nhóm C – nhập theo đơn)" : ""}</li>`).join("")}</ul>${dep && (!S.user || S.user.tier !== "b2b") ? `<p class="small">Đơn có hàng nhóm C: cần đặt cọc 30% online trước khi BuildX nhập hàng; không áp dụng COD.</p>` : ""}<label class="row small"><input type="checkbox" id="ag" ${ck.agree ? "checked" : ""}> Tôi đồng ý đặt trước và chờ thời gian nhập hàng</label></div>` : '<div class="notice ok small">Tất cả hàng đều có sẵn.</div>'}
       <div class="row" style="margin-top:12px"><a class="btn plain" href="#/cart">← Giỏ hàng</a><button class="btn" type="submit">Tiếp tục thanh toán</button></div></form></div></div>`;
   }, () => {
     if (!S.cart.length) return;
     const ck = S.checkout;
     $$("[name=m]").forEach((r) => (r.onchange = () => { ck.name = $("#cn").value; ck.phone = $("#cp").value; ck.mode = r.value; rerender(); }));
     const cas = $("#cas"); if (cas) cas.onchange = () => { $("#ca").value = cas.value; };
-    $("#fc").onsubmit = (e) => { e.preventDefault(); ck.name = $("#cn").value; ck.phone = $("#cp").value; ck.addr = ck.mode === "pickup" ? "Nhận tại cửa hàng" : $("#ca").value; const ag = $("#ag"); ck.agree = ag ? ag.checked : true; if (E.preorderItems(S.cart).length && !ck.agree) return toast("Cần đồng ý đặt trước để tiếp tục"); S.guestPhone = ck.phone; ck.stage = "choose"; go("#/pay"); };
+    const cvat = $("#cvat"); if (cvat) cvat.onchange = () => { ck.vat = cvat.checked; $("#vat-box").style.display = cvat.checked ? "grid" : "none"; };
+    $("#fc").onsubmit = (e) => {
+      e.preventDefault();
+      ck.name = $("#cn").value;
+      ck.phone = $("#cp").value;
+      ck.addr = ck.mode === "pickup" ? "Nhận tại cửa hàng" : $("#ca").value;
+      const ag = $("#ag");
+      ck.agree = ag ? ag.checked : true;
+      if (E.preorderItems(S.cart).length && !ck.agree) return toast("Cần đồng ý đặt trước để tiếp tục");
+      if (ck.vat) {
+        ck.vatInvoice = { name: $("#v-name").value, taxId: $("#v-tax").value, addr: $("#v-addr").value };
+      } else ck.vatInvoice = null;
+      S.guestPhone = ck.phone;
+      ck.stage = "choose";
+      go("#/pay");
+    };
   });
 
   // ================= SC16 – Thanh toán =================
@@ -395,22 +518,54 @@
     if (ck.stage === "gateway") { const o = ck.order; return `<div class="wrap page" style="max-width:560px"><div class="panel stack"><span class="lbl">Cổng ${esc(o.pay.method)} · môi trường thử (sandbox)</span><h1>${o.pay.due < o.total ? "Đặt cọc 30%" : "Thanh toán"} ${fmt(o.pay.due)}</h1><p class="small muted">Đơn ${o.id} · tổng ${fmt(o.total)}. Đơn chỉ được đánh dấu đã thanh toán khi máy chủ BuildX xác thực thông báo (IPN) hợp lệ từ cổng, không dựa vào trang trả về của trình duyệt.</p><div class="row"><button class="btn" type="button" id="ok">Mô phỏng: thanh toán thành công</button><button class="btn plain" type="button" id="ko">Mô phỏng: khách hủy</button></div><p class="xs muted">${tag("SC16", "UC09")}</p></div></div>`; }
     const pre = E.preorderItems(S.cart), dep = pre.some((x) => x.grp === "C");
     const cp = S.coupon ? E.couponCheck(S.coupon, S.cart) : null;
-    const total = cartSub() - (cp && cp.ok ? cp.amt : 0);
-    const methods = [["COD", "Thanh toán khi nhận hàng (COD)"], ["MoMo", "Ví MoMo"], ["VNPAY", "VNPAY QR / ngân hàng"], ["Thẻ", "Thẻ Visa/Mastercard/JCB"]];
-    const m = ck.method || (dep ? "VNPAY" : "COD");
+    const uTier = S.user ? CUST_TIERS[S.user.tier] : null;
+    const tierDisc = uTier && uTier.discRate ? Math.round(cartSub() * uTier.discRate / 1000) * 1000 : 0;
+    const cpAmt = cp && cp.ok ? cp.amt : 0;
+    const total = Math.max(0, cartSub() - cpAmt - tierDisc);
+    const isB2B = S.user && S.user.tier === "b2b";
+    const methods = [
+      ["COD", "Thanh toán khi nhận hàng (COD)"],
+      ["MoMo", "Ví MoMo"],
+      ["VNPAY", "VNPAY QR / ngân hàng"],
+      ["Thẻ", "Thẻ Visa/Mastercard/JCB"],
+      ...(isB2B ? [["Công nợ B2B", "Công nợ Doanh nghiệp (Đối soát & thanh toán theo hợp đồng 15–30 ngày)"]] : [])
+    ];
+    const m = ck.method || (isB2B ? "Công nợ B2B" : dep ? "VNPAY" : "COD");
     return `<div class="wrap page" style="max-width:900px"><h1>Thanh toán</h1><p class="muted small">${tag("SC16", "UC09")}</p>
-    <div class="side" style="margin-top:12px"><div class="panel"><fieldset class="stack" style="gap:8px;border:0;padding:0;margin:0"><legend class="lbl">Phương thức</legend>${methods.map(([k, l]) => `<label class="row small"><input type="radio" name="pm" value="${k}" ${m === k ? "checked" : ""} ${dep && k === "COD" ? "disabled" : ""}> ${l}${dep && k === "COD" ? " – không áp dụng cho đơn đặt cọc" : ""}</label>`).join("")}</fieldset>
+    <div class="side" style="margin-top:12px"><div class="panel"><fieldset class="stack" style="gap:8px;border:0;padding:0;margin:0"><legend class="lbl">Phương thức</legend>${methods.map(([k, l]) => `<label class="row small"><input type="radio" name="pm" value="${k}" ${m === k ? "checked" : ""} ${dep && k === "COD" && !isB2B ? "disabled" : ""}> ${l}${dep && k === "COD" && !isB2B ? " – không áp dụng cho đơn đặt cọc" : ""}</label>`).join("")}</fieldset>
       <p class="xs muted" style="margin-top:10px">Đơn rủi ro (giá trị cao, COD lần đầu, địa chỉ trùng, nhiều đơn trong thời gian ngắn) cần xác minh OTP hoặc nhân viên gọi xác nhận.</p></div>
-    <div class="panel stack"><span class="lbl">Tổng đơn</span><span class="price big">${fmt(total)}</span>${cp && cp.ok ? `<span class="small">Đã giảm ${fmt(cp.amt)} (${esc(cp.cp.code)})</span>` : ""}${dep ? `<div class="notice small">Đặt cọc 30% ngay: <b>${fmt(Math.round((total * FEES.depositRate) / 1000) * 1000)}</b>; phần còn lại thanh toán khi nhận.</div>` : ""}<span class="small">Nhận: ${ck.mode === "in" ? "giao nội thành, miễn phí" : ck.mode === "out" ? "giao liên tỉnh, phí báo khi xác nhận" : "tại cửa hàng"}</span><button class="btn" type="button" id="po">Đặt hàng</button><a class="small" href="#/checkout">← Sửa thông tin nhận hàng</a></div></div></div>`;
+    <div class="panel stack"><span class="lbl">Tổng thanh toán</span><span class="price big">${fmt(total)}</span>
+      ${tierDisc ? `<span class="small" style="color:var(--ok)">✓ Đặc quyền ${esc(uTier.name)}: −${fmt(tierDisc)}</span>` : ""}
+      ${cp && cp.ok ? `<span class="small">Đã giảm mã ${fmt(cp.amt)} (${esc(cp.cp.code)})</span>` : ""}
+      ${dep && m !== "Công nợ B2B" ? `<div class="notice small">Đặt cọc 30% ngay: <b>${fmt(Math.round((total * FEES.depositRate) / 1000) * 1000)}</b>; phần còn lại thanh toán khi nhận.</div>` : ""}
+      <span class="small">Nhận: ${ck.mode === "in" ? "giao nội thành, miễn phí" : ck.mode === "out" ? "giao liên tỉnh, phí báo khi xác nhận" : "tại cửa hàng"}</span>
+      <button class="btn" type="button" id="po">Đặt hàng</button><a class="small" href="#/checkout">← Sửa thông tin nhận hàng</a></div></div></div>`;
   }, () => {
     const ck = S.checkout; if (!ck) return;
     $$("[name=pm]").forEach((r) => (r.onchange = () => { ck.method = r.value; }));
     const po = $("#po"); if (po) po.onclick = () => {
       const m = ($("input[name=pm]:checked") || {}).value;
       const cp = S.coupon ? E.couponCheck(S.coupon, S.cart) : null;
-      const o = E.createOrder({ cust: { name: ck.name, phone: ck.phone, addr: ck.addr }, lines: E.clone(S.cart), ship: { mode: ck.mode }, coupon: cp && cp.ok ? cp : null, payMethod: m, channel: "Website" });
+      const uTier = S.user ? CUST_TIERS[S.user.tier] : null;
+      const tierDisc = uTier && uTier.discRate ? Math.round(cartSub() * uTier.discRate / 1000) * 1000 : 0;
+      const o = E.createOrder({
+        cust: {
+          name: ck.name,
+          phone: ck.phone,
+          addr: ck.addr,
+          tier: S.user ? S.user.tier : "guest",
+          company: ck.vatInvoice || (S.user && S.user.company ? S.user.company : null),
+        },
+        lines: E.clone(S.cart),
+        ship: { mode: ck.mode },
+        coupon: cp && cp.ok ? cp : null,
+        tierDisc,
+        vatInvoice: ck.vatInvoice,
+        payMethod: m,
+        channel: "Website",
+      });
       S.cart = []; S.coupon = null; ck.order = o; S.lastOrder = o.id;
-      if (m === "COD") { go("#/done"); return; }
+      if (m === "COD" || m === "Công nợ B2B") { go("#/done"); return; }
       ck.stage = o.risk.needVerify ? "otp" : "gateway"; rerender();
     };
     const vo = $("#vo"); if (vo) vo.onclick = () => { if ($$(".otp input").map((i) => i.value).join("") !== "246810") return toast("OTP không đúng"); ck.order.risk.verified = true; E.olog(ck.order, "Khách xác minh OTP thành công", "Khách hàng"); ck.stage = "gateway"; rerender(); };

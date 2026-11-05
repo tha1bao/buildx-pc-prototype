@@ -1,7 +1,7 @@
 // BuildX PC – khung trang, router theo hash và các hàm hiển thị dùng chung.
 window.BXA = (function () {
   "use strict";
-  const { CAT, ROLES } = window.BX;
+  const { CAT, ROLES, CUST_TIERS } = window.BX;
   const E = window.BXE, S = E.S;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -31,7 +31,12 @@ window.BXA = (function () {
   const cartCount = () => S.cart.length;
   function shell(scr, body, path) {
     const fab = `<button class="btn fab" type="button" id="fab">Màn hình (${SCREENS.filter((s) => s.code.startsWith("SC")).length})</button>`;
-    if (scr.area === "store") return `<header class="store-h"><div class="wrap"><a class="brand" href="#/home">Build<b>X</b> PC</a><nav class="snav">${storeNav.map(([p, l]) => `<a href="#/${p}" class="${path === p ? "on" : ""}">${l}</a>`).join("")}</nav><div class="sright"><a class="btn sm plain cartbtn" href="#/cart">Giỏ hàng<span class="badge" id="cartn">${cartCount()}</span></a>${S.user ? `<a class="btn sm ghost" href="#/orders-me">${esc(S.user.name.split(" ").pop())}</a>` : `<a class="btn sm ghost" href="#/login">Đăng nhập</a>`}<a class="btn sm plain" href="#/orders">Nội bộ</a></div></div></header><main>${body}</main><footer class="store-f"><div class="wrap"><span>BuildX PC · Cửa hàng mặt phố, Hà Nội · Prototype ISC301 theo kế hoạch v3</span><span><a href="#/saved">Cấu hình đã lưu</a> · <a href="#/profile">Hồ sơ</a> · <a href="#/warranty">Bảo hành & Care</a> · <a href="#/map">Sơ đồ màn hình</a></span></div></footer>${fab}`;
+    if (scr.area === "store") {
+      const u = S.user;
+      const tInfo = u && CUST_TIERS ? CUST_TIERS[u.tier] : null;
+      const userBtn = u ? `<a class="btn sm ghost" href="#/profile" style="display:inline-flex;align-items:center;gap:6px"><span class="pill ${tInfo ? tInfo.color : 'info'} xs">${tInfo ? tInfo.badge : 'Member'}</span><span>${esc(u.name.split(" ").slice(-2).join(" "))}</span></a>` : `<a class="btn sm ghost" href="#/login">Đăng nhập</a>`;
+      return `<header class="store-h"><div class="wrap"><a class="brand" href="#/home">Build<b>X</b> PC</a><nav class="snav">${storeNav.map(([p, l]) => `<a href="#/${p}" class="${path === p ? "on" : ""}">${l}</a>`).join("")}</nav><div class="sright"><a class="btn sm plain cartbtn" href="#/cart">Giỏ hàng<span class="badge" id="cartn">${cartCount()}</span></a>${userBtn}<a class="btn sm plain" href="#/orders" title="Cổng dành cho nhân viên cửa hàng">Nội bộ</a></div></div></header><main>${body}</main><footer class="store-f"><div class="wrap"><span>BuildX PC · Cửa hàng mặt phố, Hà Nội · Prototype ISC301 theo kế hoạch v3</span><span><a href="#/saved">Cấu hình đã lưu</a> · <a href="#/profile">Hồ sơ & hạng thành viên</a> · <a href="#/warranty">Bảo hành & Care</a> · <a href="#/map">Sơ đồ màn hình</a></span></div></footer>${fab}`;
+    }
     const role = `<label class="row small" style="gap:6px">Vai trò demo <select id="role" style="width:auto;padding:5px 8px">${Object.keys(ROLES).map((r) => `<option ${r === S.staff.role ? "selected" : ""}>${r}</option>`).join("")}</select></label>`;
     const ok = allowed(path);
     return `<div class="admin"><aside class="rail"><a class="brand" href="#/orders">Build<b style="color:var(--accent)">X</b> Nội bộ</a>${adminNav.map(([g, items]) => { const vis = items.filter(([p]) => allowed(p)); return vis.length ? `<div class="grp">${g}</div>${vis.map(([p, l]) => { const sc = SCREENS.find((s) => s.path === p); return `<a href="#/${p}" class="${path === p ? "on" : ""}"><span>${l}</span><span class="n">${sc ? sc.code : ""}</span></a>`; }).join("")}` : ""; }).join("")}<div class="grp">Khác</div><a href="#/home"><span>Website khách</span></a><a href="#/map"><span>Sơ đồ màn hình</span></a></aside><div><div class="atop"><span class="small muted">${scr.code} · ${esc(scr.title)}</span><span class="row small">${role}<span>${esc(S.staff.name)}</span></span></div><div class="amain">${ok ? body : `<div class="empty">Vai trò <b>${esc(S.staff.role)}</b> không có quyền mở màn hình này (UC22: mỗi người chỉ thấy chức năng đúng vai trò). Đổi vai trò ở góc trên.</div>`}</div></div></div>${fab}`;

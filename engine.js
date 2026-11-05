@@ -2,7 +2,7 @@
 // luật tương thích (v3 mục 14.3), tồn kho theo serial, đơn hàng theo bảng trạng thái (v3 mục 14.6).
 // Trạng thái chỉ lưu trong bộ nhớ trang (prototype).
 window.BXE = (function () {
-  const { P, ORDER, COMBOS, FEES, STATUSES } = window.BX;
+  const { P, ORDER, COMBOS, FEES, STATUSES, CUST_TIERS, PRESET_CUSTOMERS } = window.BX;
   const byId = (id) => P.find((p) => p.id === id);
   const TODAY = new Date(2027, 3, 16, 10, 0);
   const days = (d) => Math.floor((TODAY - d) / 864e5);
@@ -218,21 +218,25 @@ window.BXE = (function () {
     const score = r.reduce((t, x) => t + x[1], 0);
     return { score, reasons: r.map((x) => x[0]), needVerify: score >= 50, verified: false };
   }
-  function createOrder({ cust, lines, ship, coupon, payMethod, channel, date }) {
+  function createOrder({ cust, lines, ship, coupon, payMethod, channel, date, tierDisc, vatInvoice }) {
     const sub = lines.reduce((t, l) => t + linePrice(l), 0);
     const disc = coupon ? coupon.amt : 0;
+    const tDisc = tierDisc || (cust && cust.tierDisc) || 0;
     const shipFee = 0;
-    const total = sub - disc + shipFee;
+    const total = Math.max(0, sub - disc - tDisc + shipFee);
     const pre = channel === "Tại quầy" ? [] : preorderItems(lines);
-    const needDeposit = pre.some((x) => x.grp === "C");
+    const isDebt = payMethod === "Công nợ B2B";
+    const needDeposit = isDebt ? false : pre.some((x) => x.grp === "C");
     const o = {
-      id: `BX-${String(++orderSeq).padStart(4, "0")}`, date: date || TODAY, channel: channel || "Website", cust, lines, ship: ship || { mode: "in" }, coupon: coupon ? coupon.cp.code : null, disc, sub, total,
-      pay: { method: payMethod, status: payMethod === "COD" ? "COD – chưa thu" : "Chưa thanh toán", paid: 0, due: needDeposit && payMethod !== "COD" ? Math.round((total * FEES.depositRate) / 1000) * 1000 : total },
+      id: `BX-${String(++orderSeq).padStart(4, "0")}`, date: date || TODAY, channel: channel || "Website", cust, lines, ship: ship || { mode: "in" }, coupon: coupon ? coupon.cp.code : null, disc, tierDisc: tDisc, sub, total,
+      pay: { method: payMethod, status: isDebt ? "Công nợ B2B (đối soát 15–30 ngày)" : payMethod === "COD" ? "COD – chưa thu" : "Chưa thanh toán", paid: 0, due: needDeposit && payMethod !== "COD" ? Math.round((total * FEES.depositRate) / 1000) * 1000 : total },
       preorder: pre, needDeposit, status: "Mới", short: [], tech: "", qc: null, waybill: "", asm: lines.some((l) => l.type === "pc" && l.asm !== "none"), log: [], stockOut: false, review: null,
+      priority: (cust && cust.tier === "vip") || false,
+      vatInvoice: vatInvoice || (cust && cust.company ? cust.company : null),
     };
     o.risk = riskScore(o);
     if (coupon) coupon.cp.used++;
-    o.log.push({ t: o.date, who: channel === "Tại quầy" ? S.staff.name : "Hệ thống", msg: `Tạo đơn (${o.channel})` });
+    o.log.push({ t: o.date, who: channel === "Tại quầy" ? S.staff.name : "Hệ thống", msg: `Tạo đơn (${o.channel})${cust && cust.tier === "vip" ? " · [Đặc quyền VIP]" : cust && cust.tier === "b2b" ? " · [Doanh nghiệp B2B]" : ""}` });
     S.orders.unshift(o);
     return o;
   }
@@ -335,7 +339,8 @@ window.BXE = (function () {
     mk({ cust: { name: "Đỗ Hoàng Nam", phone: "0868 441 902", addr: "99 Xuân Thủy, Cầu Giấy" }, lines: [pc("gamer"), { type: "part", id: "D01", qty: 1 }, { type: "part", id: "KB1", qty: 1 }], payMethod: "COD", date: new Date(2027, 3, 16, 9) }, { to: 0 });
     mk({ cust: { name: "Hoàng Bảo Ngọc", phone: "0915 909 221", addr: "3 Duy Tân, Cầu Giấy" }, lines: [pc("esports", "none"), { type: "part", id: "D01", qty: 1 }], payMethod: "MoMo", ship: { mode: "pickup" }, date: new Date(2027, 3, 16, 8) }, { paid: "full", to: 1 });
     // khách demo đăng nhập có một đơn đã giao để xem phiếu bảo hành
-    mk({ cust: { name: "Nguyễn Minh Anh", phone: "0912 345 678", addr: "18 Hoàng Quốc Việt, Cầu Giấy" }, lines: [pc("gamer")], payMethod: "VNPAY", date: new Date(2027, 3, 5) }, { paid: "full", to: 5, wb: "AHM-70140" });
+    mk({ cust: { name: "Nguyễn Minh Anh", phone: "0912 345 678", addr: "18 Hoàng Quốc Việt, Cầu Giấy", tier: "vip" }, lines: [pc("gamer")], payMethod: "VNPAY", date: new Date(2027, 3, 5) }, { paid: "full", to: 5, wb: "AHM-70140" });
+    mk({ cust: { name: "Công ty CP Công Nghệ NextGen", phone: "0988 999 888", addr: "Tầng 8, Keangnam Landmark 72, Nam Từ Liêm", tier: "b2b", company: { name: "Công ty Cổ phần Công Nghệ NextGen Việt Nam", taxId: "0109876543", addr: "Tầng 8, Keangnam Landmark 72, Mễ Trì, Nam Từ Liêm" } }, lines: [pc("creator"), pc("creator")], payMethod: "Công nợ B2B", date: new Date(2027, 3, 12) }, { to: 1 });
     const po = createPO([{ id: "C02", q: 1 }, { id: "G03", q: 1 }], "NPP01", S.orders.find((o) => o.cust.name === "Lê Quang Thắng").id); po.status = "NPP xác nhận"; po.eta = "17/04/2027";
     S.requests.push(
       { id: "YC-501", type: "Đặt lịch", src: "Website", cust: "Trần Minh Khôi", phone: "0904 220 118", what: "Vệ sinh – thay keo tại nhà (nội thành)", when: "18/04 09:00–11:00", tech: "", st: "Mới", code: "DV-8812" },

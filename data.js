@@ -104,6 +104,102 @@ window.BX = (function () {
     kpi: { margin: 13.9, marginAlert: 13, breakeven: 35, cac: 390000, visitLead: 3, leadOrder: 20, asm: 85, care: 20 },
   };
 
+  // Phân quyền & phân hạng tài khoản khách hàng (Customer Tiers & RBAC)
+  const CUST_TIERS = {
+    standard: {
+      key: "standard",
+      name: "Thành viên Tiêu chuẩn",
+      badge: "Member",
+      discRate: 0,
+      color: "info",
+      perks: [
+        "Tích lũy điểm 1% giá trị đơn hàng",
+        "Lưu cấu hình PC & chia sẻ không giới hạn",
+        "Phiếu bảo hành điện tử theo Serial",
+      ],
+      priorityAsm: false,
+      vatSupport: false,
+      creditPay: false,
+    },
+    vip: {
+      key: "vip",
+      name: "Thành viên VIP / Gamer Pro",
+      badge: "VIP −2%",
+      discRate: 0.02,
+      color: "acc",
+      perks: [
+        "Chiết khấu tự động 2% toàn bộ đơn hàng (áp dụng trực tiếp)",
+        "Ưu tiên điều phối lắp ráp & QC hỏa tốc tại xưởng",
+        "Tặng 1 lần vệ sinh máy & tra keo tản nhiệt miễn phí/năm",
+        "Kỹ thuật viên tư vấn 1-1 qua Zalo ưu tiên",
+      ],
+      priorityAsm: true,
+      vatSupport: false,
+      creditPay: false,
+    },
+    b2b: {
+      key: "b2b",
+      name: "Khách hàng Doanh nghiệp / B2B",
+      badge: "B2B −5%",
+      discRate: 0.05,
+      color: "ok",
+      perks: [
+        "Bảng giá đối tác B2B: Chiết khấu tự động 5% cho PC & linh kiện",
+        "Hỗ trợ xuất hóa đơn điện tử GTGT (VAT) trực tiếp",
+        "Thanh toán công nợ 15–30 ngày theo hợp đồng đối soát",
+        "Kỹ thuật viên bàn giao & lắp đặt tận nơi tại doanh nghiệp",
+      ],
+      priorityAsm: true,
+      vatSupport: true,
+      creditPay: true,
+    },
+  };
+
+  const PRESET_CUSTOMERS = [
+    {
+      phone: "0912 345 678",
+      name: "Nguyễn Minh Anh",
+      email: "minhanh@gmail.com",
+      tier: "vip",
+      points: 1250,
+      spent: 52400000,
+      addrs: [
+        { label: "Nhà riêng", text: "18 Hoàng Quốc Việt, Cầu Giấy, Hà Nội", def: true },
+        { label: "Cơ quan", text: "Tòa nhà FPT, 17 Duy Tân, Cầu Giấy", def: false },
+      ],
+      consent: { zalo: true, email: false },
+    },
+    {
+      phone: "0988 999 888",
+      name: "Công ty CP Công Nghệ NextGen",
+      email: "procurement@nextgen.vn",
+      tier: "b2b",
+      points: 4800,
+      spent: 185000000,
+      company: {
+        name: "Công ty Cổ phần Công Nghệ NextGen Việt Nam",
+        taxId: "0109876543",
+        addr: "Tầng 8, Tòa nhà Keangnam Landmark 72, Nam Từ Liêm, Hà Nội",
+      },
+      addrs: [
+        { label: "Trụ sở chính", text: "Tầng 8, Keangnam Landmark 72, Mễ Trì, Nam Từ Liêm, Hà Nội", def: true },
+      ],
+      consent: { zalo: true, email: true },
+    },
+    {
+      phone: "0905 112 233",
+      name: "Trịnh Văn Khoa",
+      email: "khoa.trinh@gmail.com",
+      tier: "standard",
+      points: 180,
+      spent: 8500000,
+      addrs: [
+        { label: "Nhà riêng", text: "45 Chùa Láng, Đống Đa, Hà Nội", def: true },
+      ],
+      consent: { zalo: true, email: false },
+    },
+  ];
+
   const ROLES = {
     "Quản lý": ["*"],
     "Nhân viên bán hàng": ["pos", "orders", "order", "leads", "quote"],
@@ -113,5 +209,5 @@ window.BX = (function () {
     "Quản trị viên": ["users"],
   };
 
-  return { P, CAT, ORDER, COMBOS, COMBO_OPTS, FEES, APPS, FPS, STATUSES, PLAN, ROLES, sell, MARKUP };
+  return { P, CAT, ORDER, COMBOS, COMBO_OPTS, FEES, APPS, FPS, STATUSES, PLAN, ROLES, CUST_TIERS, PRESET_CUSTOMERS, sell, MARKUP };
 })();
