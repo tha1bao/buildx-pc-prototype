@@ -29,6 +29,41 @@ window.BXA = (function () {
     ["Quản trị", [["products", "Sản phẩm & giá"], ["rules", "Luật tương thích"], ["combos", "Combo"], ["requests", "Yêu cầu dịch vụ"], ["rma", "Bảo hành / RMA"], ["coupons", "Mã giảm giá"], ["banners", "Banner & giới thiệu"], ["reports", "Báo cáo"], ["users", "Người dùng"]]],
   ];
   const cartCount = () => S.cart.length;
+
+  // ---------- Hàng đợi nhiệm vụ liên kết theo vai trò ----------
+  function roleTasks() {
+    if (!S.staff) return [];
+    const role = S.staff.role;
+    const tasks = [];
+    if (role === "Quản lý" || role === "Nhân viên bán hàng" || role === "Nhân viên tư vấn") {
+      const risky = S.orders.filter((o) => o.status === "Mới" && o.risk && o.risk.needVerify && !o.risk.verified);
+      if (risky.length) tasks.push({ title: `${risky.length} đơn rủi ro cần gọi xác minh`, path: `order/${risky[0].id}`, tag: "Bán hàng", lv: "warn" });
+      const newOrders = S.orders.filter((o) => o.status === "Mới" && (!o.risk || !o.risk.needVerify || o.risk.verified));
+      if (newOrders.length) tasks.push({ title: `${newOrders.length} đơn mới cần xác nhận & giữ hàng`, path: `order/${newOrders[0].id}`, tag: "Đơn hàng", lv: "acc" });
+      const newLeads = (S.leads || []).filter((l) => l.st === "Mới" || l.st === "Đang tư vấn");
+      if (newLeads.length) tasks.push({ title: `${newLeads.length} Lead cần tư vấn & gửi báo giá`, path: `quote/${newLeads[0].id}`, tag: "Lead", lv: "info" });
+    }
+    if (role === "Quản lý") {
+      const poToApprove = (E.POS || S.pos || []).filter((p) => p.status === "Chờ duyệt");
+      if (poToApprove.length) tasks.push({ title: `${poToApprove.length} đơn nhập PO chờ Quản lý duyệt gửi NPP`, path: "po", tag: "Duyệt PO", lv: "warn" });
+    }
+    if (role === "Kỹ thuật viên" || role === "Quản lý") {
+      const asmOrders = S.orders.filter((o) => o.status === "Lắp ráp & QC");
+      if (asmOrders.length) tasks.push({ title: `${asmOrders.length} bộ máy PC đang chờ Lắp ráp & Burn-in test`, path: `ticket/${asmOrders[0].id}`, tag: "Xưởng QC", lv: "acc" });
+      const rmaOpen = (S.rma || []).filter((r) => r.st === "Đang xử lý");
+      if (rmaOpen.length) tasks.push({ title: `${rmaOpen.length} phiếu bảo hành RMA cần chẩn đoán / xử lý`, path: "rma", tag: "Bảo hành", lv: "warn" });
+    }
+    if (role === "Thủ kho" || role === "Quản lý") {
+      const shortOrders = S.orders.filter((o) => o.status === "Chờ hàng");
+      if (shortOrders.length) tasks.push({ title: `${shortOrders.length} đơn đang thiếu hàng (cần tạo đơn nhập PO)`, path: "po", tag: "Thiếu hàng", lv: "warn" });
+      const poToReceive = (E.POS || S.pos || []).filter((p) => p.status === "NPP xác nhận");
+      if (poToReceive.length) tasks.push({ title: `${poToReceive.length} lô hàng từ NPP đã về, chờ nhận & nhập serial`, path: "po", tag: "Nhập kho", lv: "acc" });
+      const readyPacking = S.orders.filter((o) => o.status === "Đóng gói");
+      if (readyPacking.length) tasks.push({ title: `${readyPacking.length} đơn đã hoàn tất QC, chờ đóng gói & xuất kho`, path: "packing", tag: "Xuất kho", lv: "ok" });
+    }
+    return tasks;
+  }
+
   function shell(scr, body, path) {
     const fab = `<button class="btn fab" type="button" id="fab">Màn hình (${SCREENS.filter((s) => s.code.startsWith("SC")).length})</button>`;
     if (scr.area === "store") {
@@ -41,7 +76,16 @@ window.BXA = (function () {
     const role = `<span class="pill info">${esc(S.staff.role)}</span><span>${esc(S.staff.name)}</span><button class="btn sm plain" type="button" id="slo">Đăng xuất</button>`;
     const badge = (p) => { const n = p === "orders" ? S.orders.filter((o) => o.status === "Mới").length : p === "requests" ? S.requests.filter((r) => r.st === "Mới").length : p === "po" ? E.poSuggestions().length : 0; return n ? `<span class="badge" title="Cần xử lý">${n}</span>` : ""; };
     const ok = allowed(path);
-    return `<div class="admin"><aside class="rail"><a class="brand" href="#/orders">Build<b style="color:var(--accent)">X</b> Nội bộ</a>${adminNav.map(([g, items]) => { const vis = items.filter(([p]) => allowed(p)); return vis.length ? `<div class="grp">${g}</div>${vis.map(([p, l]) => { const sc = SCREENS.find((s) => s.path === p); return `<a href="#/${p}" class="${path === p ? "on" : ""}"><span>${l} ${badge(p)}</span><span class="n">${sc ? sc.code : ""}</span></a>`; }).join("")}` : ""; }).join("")}<div class="grp">Khác</div><a href="#/home"><span>Website khách</span></a><a href="#/map"><span>Sơ đồ màn hình</span></a></aside><div><div class="atop"><span class="small muted">${scr.code} · ${esc(scr.title)}</span><span class="row small">${role}</span></div><div class="amain">${ok ? body : `<div class="empty">Vai trò <b>${esc(S.staff.role)}</b> không có quyền mở màn hình này (UC22: mỗi người chỉ thấy chức năng đúng vai trò). Máy chủ cũng từ chối thao tác ngoài quyền.</div>`}</div></div></div>${fab}`;
+    const tasks = roleTasks();
+    const taskBanner = tasks.length
+      ? `<div class="panel stack" style="margin-bottom:12px;background:var(--card);border-left:4px solid var(--accent);padding:10px 14px">
+          <div class="row between"><span class="lbl" style="color:var(--accent)">Nhiệm vụ cần xử lý theo vai trò [${esc(S.staff.role)}] (${tasks.length})</span><span class="xs muted">Luồng nghiệp vụ liên kết</span></div>
+          <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:4px">
+            ${tasks.map((t) => `<a href="#/${t.path}" class="btn sm ghost row" style="font-size:12px;padding:4px 10px"><span class="pill ${t.lv} xs">${t.tag}</span><span>${esc(t.title)}</span> →</a>`).join("")}
+          </div>
+        </div>`
+      : "";
+    return `<div class="admin"><aside class="rail"><a class="brand" href="#/orders">Build<b style="color:var(--accent)">X</b> Nội bộ</a>${adminNav.map(([g, items]) => { const vis = items.filter(([p]) => allowed(p)); return vis.length ? `<div class="grp">${g}</div>${vis.map(([p, l]) => { const sc = SCREENS.find((s) => s.path === p); return `<a href="#/${p}" class="${path === p ? "on" : ""}"><span>${l} ${badge(p)}</span><span class="n">${sc ? sc.code : ""}</span></a>`; }).join("")}` : ""; }).join("")}<div class="grp">Khác</div><a href="#/home"><span>Website khách</span></a><a href="#/map"><span>Sơ đồ màn hình</span></a></aside><div><div class="atop"><span class="small muted">${scr.code} · ${esc(scr.title)}</span><span class="row small">${role}</span></div><div class="amain">${taskBanner}${ok ? body : `<div class="empty">Vai trò <b>${esc(S.staff.role)}</b> không có quyền mở màn hình này (UC22: mỗi người chỉ thấy chức năng đúng vai trò). Máy chủ cũng từ chối thao tác ngoài quyền.</div>`}</div></div></div>${fab}`;
   }
   function drawer() {
     const d = document.createElement("div"); d.className = "drawer";

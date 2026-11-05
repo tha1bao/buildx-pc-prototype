@@ -20,41 +20,146 @@
     <div class="row between"><h1>Đăng nhập khách hàng</h1>${tag("SC01", "UC01")}</div>
     <p class="muted small">Hệ thống phân quyền 3 hạng tài khoản khách hàng với các chính sách giá & đặc quyền riêng biệt.</p>
     
-    <div class="panel stack" style="background:var(--bg);border:1px dashed var(--accent);margin:14px 0;padding:12px">
-      <span class="lbl" style="color:var(--accent)">★ Tài khoản mẫu để thử phân hạng (vẫn xác thực bằng OTP)</span>
-      <div class="stack" style="gap:8px">
-        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0912 345 678">
-          <div><b style="color:var(--accent)">Nguyễn Minh Anh</b> · <span class="pill acc xs">VIP −2%</span><br><span class="xs muted">Chiết khấu tự động 2%, ưu tiên xưởng QC hỏa tốc, tích 1.250 điểm</span></div>
-          <span class="btn sm">Gửi OTP →</span>
-        </button>
-        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0988 999 888">
-          <div><b style="color:var(--ok)">Cty CP Công Nghệ NextGen</b> · <span class="pill ok xs">B2B −5%</span><br><span class="xs muted">Bảng giá sỉ −5%, xuất HĐ GTGT (VAT), thanh toán công nợ 30 ngày</span></div>
-          <span class="btn sm">Gửi OTP →</span>
-        </button>
-        <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0905 112 233">
-          <div><b>Trịnh Văn Khoa</b> · <span class="pill info xs">Member</span><br><span class="xs muted">Thành viên Tiêu chuẩn, tích lũy 1%, lưu cấu hình PC</span></div>
-          <span class="btn sm">Gửi OTP →</span>
-        </button>
-      </div>
+    <div class="tabs" style="margin-top:12px">
+      <button class="tab" id="tab-login" aria-pressed="true" type="button">Đăng nhập</button>
+      <button class="tab" id="tab-reg" aria-pressed="false" type="button">Đăng ký tài khoản</button>
     </div>
 
-    <details style="margin-top:10px">
-      <summary class="small">Hoặc đăng nhập bằng số điện thoại bất kỳ (gửi OTP)</summary>
-      <form id="f1" style="margin-top:10px"><div class="field"><label for="ph">Số điện thoại</label><input id="ph" type="tel" inputmode="tel" placeholder="VD: 0912 345 678" required></div><button class="btn" type="submit">Gửi mã OTP</button></form>
-    </details>
-    <p class="small" style="margin-top:14px"><a href="#/cart" id="guest">Tiếp tục với tư cách khách vãng lai</a> · không hưởng chiết khấu hạng thành viên.</p>
+    <!-- KHỐI ĐĂNG NHẬP -->
+    <div id="login-box" style="margin-top:12px">
+      <div class="panel stack" style="background:var(--bg);border:1px dashed var(--accent);margin-bottom:14px;padding:12px">
+        <span class="lbl" style="color:var(--accent)">★ Tài khoản mẫu để thử phân hạng (vẫn xác thực bằng OTP)</span>
+        <div class="stack" style="gap:8px">
+          <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0912 345 678">
+            <div><b style="color:var(--accent)">Nguyễn Minh Anh</b> · <span class="pill acc xs">VIP −2%</span><br><span class="xs muted">Chiết khấu tự động 2%, ưu tiên xưởng QC hỏa tốc, tích 1.250 điểm</span></div>
+            <span class="btn sm">Gửi OTP →</span>
+          </button>
+          <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0988 999 888">
+            <div><b style="color:var(--ok)">Cty CP Công Nghệ NextGen</b> · <span class="pill ok xs">B2B −5%</span><br><span class="xs muted">Bảng giá sỉ −5%, xuất HĐ GTGT (VAT), thanh toán công nợ 30 ngày</span></div>
+            <span class="btn sm">Gửi OTP →</span>
+          </button>
+          <button type="button" class="btn sm plain row between" style="text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:6px" data-quick="0905 112 233">
+            <div><b>Trịnh Văn Khoa</b> · <span class="pill info xs">Member</span><br><span class="xs muted">Thành viên Tiêu chuẩn, tích lũy 1%, lưu cấu hình PC</span></div>
+            <span class="btn sm">Gửi OTP →</span>
+          </button>
+        </div>
+      </div>
+
+      <details style="margin-top:10px">
+        <summary class="small">Hoặc đăng nhập bằng số điện thoại bất kỳ (gửi OTP)</summary>
+        <form id="f1" style="margin-top:10px"><div class="field"><label for="ph">Số điện thoại</label><input id="ph" type="tel" inputmode="tel" placeholder="VD: 0912 345 678" required></div><button class="btn" type="submit">Gửi mã OTP</button></form>
+      </details>
+      <p class="small" style="margin-top:14px"><a href="#/cart" id="guest">Tiếp tục với tư cách khách vãng lai</a> · không hưởng chiết khấu hạng thành viên.</p>
+    </div>
+
+    <!-- KHỐI ĐĂNG KÝ MỚI -->
+    <div id="reg-box" style="display:none;margin-top:12px">
+      <form id="f-reg" class="stack" style="gap:10px">
+        <div class="field">
+          <label for="reg-tier">Loại tài khoản thành viên</label>
+          <select id="reg-tier">
+            <option value="standard">Thành viên cá nhân (Member) – Tích lũy 1%</option>
+            <option value="vip">Khách hàng thân thiết (VIP) – Giảm 2% đơn hàng</option>
+            <option value="b2b">Doanh nghiệp / Đại lý (B2B) – Giảm 5%, VAT, Công nợ</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reg-name">Họ và tên / Người đại diện</label>
+          <input id="reg-name" type="text" placeholder="VD: Trần Văn Nam" required>
+        </div>
+        <div class="field">
+          <label for="reg-phone">Số điện thoại (nhận mã OTP kích hoạt)</label>
+          <input id="reg-phone" type="tel" inputmode="tel" placeholder="VD: 0934 567 890" required>
+        </div>
+        <div class="field">
+          <label for="reg-email">Email nhận hóa đơn & bảo hành</label>
+          <input id="reg-email" type="email" placeholder="nam.tran@company.com">
+        </div>
+        <div id="b2b-reg-extra" style="display:none;border-left:3px solid var(--ok);padding-left:10px;margin-top:4px" class="stack">
+          <div class="field">
+            <label for="reg-company">Tên công ty / Tổ chức</label>
+            <input id="reg-company" type="text" placeholder="VD: Công ty TNHH Công Nghệ BuildX">
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label for="reg-tax">Mã số thuế (MST xuất HĐ GTGT)</label>
+            <input id="reg-tax" type="text" placeholder="VD: 0109876543">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="reg-pw">Mật khẩu</label>
+            <input id="reg-pw" type="password" placeholder="Tối thiểu 6 ký tự" required>
+          </div>
+          <div class="field">
+            <label for="reg-cpw">Xác nhận mật khẩu</label>
+            <input id="reg-cpw" type="password" placeholder="Nhập lại mật khẩu" required>
+          </div>
+        </div>
+        <button class="btn ok" type="submit" style="margin-top:8px">Đăng ký & Nhận mã OTP</button>
+      </form>
+    </div>
   </div></div>`, () => {
     if (S.user) return;
-    const sendOtp = async (ph, btn) => {
+
+    // Chuyển tab Đăng nhập / Đăng ký
+    const tLog = $("#tab-login"), tReg = $("#tab-reg"), lBox = $("#login-box"), rBox = $("#reg-box");
+    if (tLog && tReg) {
+      tLog.onclick = () => { tLog.setAttribute("aria-pressed", "true"); tReg.setAttribute("aria-pressed", "false"); lBox.style.display = "block"; rBox.style.display = "none"; };
+      tReg.onclick = () => { tReg.setAttribute("aria-pressed", "true"); tLog.setAttribute("aria-pressed", "false"); rBox.style.display = "block"; lBox.style.display = "none"; };
+    }
+
+    // Bật tắt trường công ty khi chọn B2B
+    const rTier = $("#reg-tier"), bExtra = $("#b2b-reg-extra");
+    if (rTier && bExtra) rTier.onchange = () => { bExtra.style.display = rTier.value === "b2b" ? "block" : "none"; };
+
+    // Xử lý submit form đăng ký
+    const fReg = $("#f-reg");
+    if (fReg) fReg.onsubmit = async (e) => {
+      e.preventDefault();
+      const pw = $("#reg-pw").value, cpw = $("#reg-cpw").value;
+      if (pw.length < 6) return toast("Mật khẩu phải từ 6 ký tự");
+      if (pw !== cpw) return toast("Xác nhận mật khẩu không khớp");
+      const ph = $("#reg-phone").value.trim();
+      const tier = $("#reg-tier").value;
+      const name = $("#reg-name").value.trim();
+      const email = $("#reg-email").value.trim();
+      const company = tier === "b2b" ? { name: $("#reg-company").value || name, taxId: $("#reg-tax").value || "0109999888", addr: "Hà Nội" } : null;
+      const btn = $("#f-reg button[type=submit]");
+      btn.disabled = true;
+      try {
+        await sendOtp(ph, btn, { name, email, tier, company });
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message);
+      }
+    };
+
+    const sendOtp = async (ph, btn, regData) => {
       if (btn) btn.disabled = true;
       let r; try { r = await API.auth("otp", { phone: ph }); } catch (err) { if (btn) btn.disabled = false; return toast(err.message); }
-      $("#lg").innerHTML = `<h1>Nhập mã OTP</h1><p class="muted small">Đã gửi mã 6 số tới ${esc(ph)}, hiệu lực 5 phút.</p>${r.devOtp ? `<div class="notice small">Chưa nối nhà cung cấp SMS – mã thử nghiệm: <b class="mono">${r.devOtp}</b></div>` : ""}<form id="f2"><div class="otp">${[1, 2, 3, 4, 5, 6].map((i) => `<input inputmode="numeric" maxlength="1" aria-label="Số ${i}">`).join("")}</div>${r.isNew ? `<div class="field" style="margin-top:12px"><label for="nm">Họ tên (tài khoản mới)</label><input id="nm" type="text" required></div>` : ""}<button class="btn" type="submit" style="margin-top:12px">Xác thực</button></form>`;
+      const displayName = (regData && regData.name) || "";
+      $("#lg").innerHTML = `<h1>Nhập mã OTP</h1><p class="muted small">Đã gửi mã 6 số tới ${esc(ph)}, hiệu lực 5 phút.</p>${r.devOtp ? `<div class="notice small">Chưa nối nhà cung cấp SMS – mã thử nghiệm: <b class="mono">${r.devOtp}</b></div>` : ""}<form id="f2"><div class="otp">${[1, 2, 3, 4, 5, 6].map((i) => `<input inputmode="numeric" maxlength="1" aria-label="Số ${i}">`).join("")}</div>${r.isNew && !displayName ? `<div class="field" style="margin-top:12px"><label for="nm">Họ tên (tài khoản mới)</label><input id="nm" type="text" required></div>` : ""}<button class="btn" type="submit" style="margin-top:12px">Xác thực tài khoản</button></form>`;
       const ins = $$(".otp input");
       ins.forEach((i, k) => { i.oninput = () => { i.value = i.value.replace(/\D/g, "").slice(-1); if (i.value && ins[k + 1]) ins[k + 1].focus(); }; i.onpaste = (ev) => { const d = (ev.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, 6); if (d.length === 6) { ev.preventDefault(); ins.forEach((x, j) => (x.value = d[j])); } }; });
       ins[0].focus();
       $("#f2").onsubmit = async (ev) => {
         ev.preventDefault(); const b2 = $("#f2 button"); b2.disabled = true;
-        try { await API.auth("verify", { phone: ph, code: ins.map((i) => i.value).join(""), name: $("#nm") ? $("#nm").value : "" }); await API.refresh({ silent: true }); toast("Đăng nhập thành công"); go(S.cart.length ? "#/checkout" : "#/profile"); }
+        try {
+          const finalName = displayName || ($("#nm") ? $("#nm").value : "");
+          await API.auth("verify", { phone: ph, code: ins.map((i) => i.value).join(""), name: finalName });
+          if (regData) {
+            try {
+              await A.run("profile.save", { name: finalName, email: regData.email || "", company: regData.company });
+            } catch (_) {}
+          }
+          await API.refresh({ silent: true });
+          if (regData && regData.tier && S.user) {
+            S.user.tier = regData.tier;
+            if (regData.company) S.user.company = regData.company;
+          }
+          toast("Đăng nhập thành công");
+          go(S.cart.length ? "#/checkout" : "#/profile");
+        }
         catch (err) { b2.disabled = false; toast(err.message); }
       };
     };
