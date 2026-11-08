@@ -46,14 +46,37 @@ function resolveStaff(st, sess) {
 // Đơn khách được xem: đơn đặt trên máy này, hoặc mọi đơn theo SĐT đã xác thực OTP
 function custOrderIds(st, cust) {
   const ph = cust.verified ? normPhone(cust.phone) : null;
-  return st.orders.filter((o) => (cust.orders || []).includes(o.id) || (ph && normPhone(o.cust.phone) === ph)).map((o) => o.id);
+  return st.orders.filter((o) => (cust.orders || []).includes(o.id) || (ph && (accountOf(o) === ph || normPhone(o.cust.phone) === ph))).map((o) => o.id);
 }
 const stripPrivate = (o) => { const x = Object.assign({}, o); Object.keys(x).forEach((k) => k.startsWith("_") && delete x[k]); return x; };
 
 async function getCustomer(c, cust) {
   if (!cust.verified || !cust.phone) return null;
   const r = await c.query("SELECT doc FROM customers WHERE phone = $1", [normPhone(cust.phone)]);
-  return r.rows.length ? r.rows[0].doc : null;
+  return r.rows.length ? custDefaults(r.rows[0].doc) : null;
+}
+// Tài khoản mới hoặc dữ liệu cũ thiếu trường: hạng Member, điểm và chi tiêu bằng 0
+function custDefaults(d) {
+  if (!BX.CUST_TIERS[d.tier]) d.tier = "standard";
+  if (typeof d.points !== "number") d.points = 0;
+  if (typeof d.spent !== "number") d.spent = 0;
+  d.addrs = d.addrs || []; d.saved = d.saved || [];
+  return d;
+}
+const accountOf = (o) => o.cust.account || normPhone(o.cust.phone);
+// Cộng điểm (1% giá trị đơn, 1 điểm = 1.000đ) và chi tiêu khi đơn hoàn tất; Member đủ 50 triệu tự lên VIP
+const VIP_SPEND = 50000000;
+async function creditLoyalty(c, E, o) {
+  if (o.status !== "Hoàn tất" || o.loyalty) return;
+  const r = await c.query("SELECT doc FROM customers WHERE phone = $1 FOR UPDATE", [accountOf(o)]);
+  if (!r.rows.length) return;
+  const d = custDefaults(r.rows[0].doc), pts = Math.floor((o.total * 0.01) / 1000);
+  d.spent += o.total; d.points += pts;
+  o.loyalty = { points: pts, spent: o.total };
+  let up = "";
+  if (d.tier === "standard" && d.spent >= VIP_SPEND) { d.tier = "vip"; up = " · tự lên hạng VIP (chi tiêu ≥ 50 triệu)"; }
+  await c.query("UPDATE customers SET doc = $2, updated_at = now() WHERE phone = $1", [accountOf(o), JSON.stringify(d)]);
+  E.olog(o, `Cộng ${pts.toLocaleString("vi-VN")} điểm và ${o.total.toLocaleString("vi-VN")}đ chi tiêu cho tài khoản${up}`, "Hệ thống");
 }
 
 // Dữ liệu gửi về trình duyệt theo quyền
@@ -66,6 +89,7 @@ function snapshot(st, sess, staff, customer) {
     me: { phone: sess.cust.verified ? sess.cust.phone : sess.cust.guestPhone || "", verified: !!sess.cust.verified, orderIds: ids },
     coupons: st.coupons.map((cp) => ({ code: cp.code, desc: cp.desc, type: cp.type, val: cp.val, scope: cp.scope, from: cp.from, to: cp.to, min: cp.min, max: cp.max, used: cp.used })),
     seq: st.seq,
+    ruleCfg: st.ruleCfg,
   };
   if (staff) {
     Object.assign(out, { orders: st.orders.map(stripPrivate), units: st.units, pos: st.pos, requests: st.requests, rma: st.rma, warranties: st.warranties, log: st.log.slice(0, 120), staffUsers: st.staffUsers, availMap: null });
@@ -143,10 +167,13 @@ const act = (name, opt, run) => (A[name] = Object.assign({ run }, opt));
 
 // ===== Khách hàng =====
 act("order.create", { cust: true }, async ({ E, st, c, p, sess }) => {
+  // Bắt buộc đăng nhập (SĐT + OTP) mới được đặt hàng; đơn gắn với tài khoản, SĐT người nhận có thể khác
+  const acc = await getCustomer(c, sess.cust);
+  if (!acc) fail("Vui lòng đăng nhập hoặc đăng ký tài khoản để đặt hàng.", 401);
   const lines = cleanLines(E, p.lines), cust = cleanCust(p.cust);
-  // Hạng khách lấy từ tài khoản đã xác thực OTP trên máy chủ, không tin trình duyệt
-  const acc = await getCustomer(c, sess.cust), tier = acc && BX.CUST_TIERS[acc.tier] ? acc.tier : "guest";
-  if (tier !== "guest") cust.tier = tier;
+  const tier = acc.tier;
+  cust.account = normPhone(acc.phone);
+  if (tier !== "standard") cust.tier = tier;
   const ship = { mode: oneOf((p.ship && p.ship.mode) || "in", ["in", "out", "pickup"], "Cách nhận hàng") };
   if (ship.mode === "pickup") cust.addr = "Nhận tại cửa hàng"; else if (!cust.addr) fail("Thiếu địa chỉ giao hàng.");
   const payMethod = oneOf(p.payMethod, ["COD", "MoMo", "VNPAY", "Thẻ", "Công nợ B2B"], "Phương thức thanh toán");
@@ -275,7 +302,7 @@ act("order.ship", { path: "packing" }, ({ E, st, p }) => {
   const wb = o.ship.mode === "pickup" ? "Chờ khách nhận tại cửa hàng" : o.ship.mode === "out" ? "GHN " + require("crypto").randomBytes(3).toString("hex").toUpperCase() : "AHM-" + ++st.seq.wb;
   must(E.ship(o, wb)); return { waybill: wb };
 });
-act("order.complete", { path: "packing" }, ({ E, p }) => { must(E.complete(findOrderOr404(E, p.id))); });
+act("order.complete", { path: "packing" }, async ({ E, c, p }) => { const o = findOrderOr404(E, p.id); must(E.complete(o)); await creditLoyalty(c, E, o); });
 
 // ===== Nhân viên: bán tại quầy =====
 act("pos.lookup", { path: "pos" }, async ({ st, c, p }) => {
@@ -307,7 +334,9 @@ act("pos.checkout", { path: "pos" }, async ({ E, st, c, p, staff }) => {
   E.gatewayPaid(o, o.total, staff.name, `Thu ${o.total.toLocaleString("vi-VN")}đ tại quầy (${pay})`);
   must(E.confirmOrder(o));
   if (o.status === "Đã xác nhận") { E.toNext(o); if (o.status === "Đóng gói") { must(E.ship(o, "Giao tại quầy")); must(E.complete(o)); } }
-  await c.query("INSERT INTO customers (phone, name, doc) VALUES ($1, $2, $3) ON CONFLICT (phone) DO NOTHING", [normPhone(cust.phone), cust.name, JSON.stringify({ name: cust.name, phone: cust.phone, email: "", addrs: [], consent: { zalo: false, email: false }, saved: [] })]);
+  o.cust.account = normPhone(cust.phone);
+  await c.query("INSERT INTO customers (phone, name, doc) VALUES ($1, $2, $3) ON CONFLICT (phone) DO NOTHING", [normPhone(cust.phone), cust.name, JSON.stringify({ name: cust.name, phone: cust.phone, email: "", addrs: [], consent: { zalo: false, email: false }, saved: [], tier: "standard", points: 0, spent: 0 })]);
+  await creditLoyalty(c, E, o);
   return { id: o.id, status: o.status, total: o.total };
 });
 act("quote.order", { path: "quote" }, ({ E, p, staff }) => {
@@ -433,15 +462,50 @@ act("user.update", { path: "users" }, async ({ E, st, c, p, staff }) => {
     await c.query("UPDATE staff_users SET pass_hash = $2 WHERE email = $1", [email, auth.hashPassword(pw)]); E.log("Đặt lại mật khẩu " + u.name, email);
   } else fail("Trường không hợp lệ.");
 });
-act("customer.setTier", { path: "users" }, async ({ E, c, p }) => {
+act("customer.setTier", { path: "users" }, async ({ E, st, c, p }) => {
   const tier = oneOf(p.tier, Object.keys(BX.CUST_TIERS), "Hạng khách");
   const ph = normPhone(p.phone); if (!validPhone(ph)) fail("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
   const r = await c.query("SELECT doc FROM customers WHERE phone = $1 FOR UPDATE", [ph]);
   if (!r.rows.length) fail("Chưa có tài khoản khách với SĐT này.", 404);
   const d = r.rows[0].doc; const old = d.tier || "standard"; d.tier = tier;
-  if (tier === "b2b" && !d.company) d.company = { name: d.name, taxId: "", addr: (d.addrs[0] || {}).text || "" };
+  if (tier === "b2b") { d.company = (d.b2bRequest && d.b2bRequest.company) || d.company || { name: d.name, taxId: "", addr: (d.addrs[0] || {}).text || "" }; }
+  if (d.b2bRequest && d.b2bRequest.status === "Chờ duyệt") d.b2bRequest.status = tier === "b2b" ? "Đã duyệt" : "Từ chối";
+  st.requests.filter((r) => r.b2b === ph && !["Hoàn tất", "Đã hủy"].includes(r.st)).forEach((r) => (r.st = tier === "b2b" ? "Hoàn tất" : "Đã hủy"));
   await saveCust(c, d); E.log(`Đổi hạng khách ${d.name}: ${old} → ${tier}`, ph); return { name: d.name };
 });
+// ===== Quản lý: luật tương thích (SC35) =====
+const LV_NAME = { block: "Chặn theo thiết kế", warn: "Chỉ cảnh báo", off: "Tắt" };
+act("rules.update", { path: "rules", roles: ["Quản lý"] }, ({ E, st, p }) => {
+  const before = ENG.normRuleCfg(st.ruleCfg), next = ENG.normRuleCfg({ levels: Object.assign({}, before.levels, p.levels || {}), params: Object.assign({}, before.params, p.params || {}) });
+  // giá trị gửi lên ngoài giới hạn bị normRuleCfg bỏ qua: báo lỗi thay vì lặng lẽ giữ giá trị cũ
+  Object.entries(p.params || {}).forEach(([k, v]) => { if (typeof before.params[k] === "number" && Number(v) !== next.params[k]) fail(`Thông số ${k} ngoài giới hạn cho phép.`); });
+  Object.entries(p.levels || {}).forEach(([k, v]) => { if (!(k in before.levels) || next.levels[k] !== v) fail(`Mức xử lý của ${k} không hợp lệ.`); });
+  const diffs = [];
+  Object.keys(next.levels).forEach((k) => { if (next.levels[k] !== before.levels[k]) diffs.push(`${k}: ${LV_NAME[before.levels[k]]} → ${LV_NAME[next.levels[k]]}`); });
+  Object.keys(next.params).forEach((k) => { if (next.params[k] !== before.params[k]) diffs.push(`${k}: ${before.params[k]} → ${next.params[k]}`); });
+  if (!diffs.length) fail("Không có thay đổi.");
+  st.ruleCfg = next;
+  E.log("Sửa luật tương thích: " + diffs.join("; "), "SC35");
+  return { changes: diffs.length };
+});
+act("rules.reset", { path: "rules", roles: ["Quản lý"] }, ({ E, st }) => { st.ruleCfg = ENG.normRuleCfg(null); E.log("Khôi phục luật tương thích mặc định", "SC35"); });
+
+// ===== Khách: yêu cầu nâng cấp tài khoản doanh nghiệp (B2B) =====
+act("b2b.request", { cust: true }, async ({ E, st, c, p, sess }) => {
+  const d = await custDoc(c, sess);
+  custDefaults(d);
+  if (d.tier === "b2b") fail("Tài khoản đã là doanh nghiệp B2B.");
+  if (d.b2bRequest && d.b2bRequest.status === "Chờ duyệt") fail("Đã có yêu cầu đang chờ duyệt.");
+  const company = { name: str(p.name, 150, "tên công ty"), taxId: str(p.taxId, 20, "mã số thuế"), addr: str(p.addr || "", 250, "địa chỉ công ty", false) };
+  if (!/^\d{10}(-\d{3})?$/.test(company.taxId)) fail("Mã số thuế gồm 10 chữ số (hoặc 10 số + '-' + 3 số với chi nhánh).");
+  d.b2bRequest = { status: "Chờ duyệt", company, at: E.now() };
+  await saveCust(c, d);
+  const id = "YC-" + ++st.seq.req;
+  st.requests.unshift({ id, type: "Tư vấn", src: "Website", cust: d.name, phone: d.phone, what: `Đăng ký tài khoản doanh nghiệp B2B: ${company.name} · MST ${company.taxId}`, when: "", tech: "", st: "Mới", code: "TV-" + ++st.seq.tv, created: E.now(), b2b: normPhone(d.phone) });
+  E.log("Khách gửi yêu cầu tài khoản B2B", id, d.name);
+  return { id };
+});
+
 act("demo.reset", { roles: ["Quản lý", "Quản trị viên"] }, async ({ c }) => { await require("./seed").seed(c); return { reset: true }; });
 
 // ---------- điểm vào HTTP ----------
@@ -522,7 +586,7 @@ async function handleAuth(body, req, res, sess) {
       await c.query("DELETE FROM otp_codes WHERE phone = $1", [phone]);
       const ex = await c.query("SELECT doc FROM customers WHERE phone = $1", [phone]);
       if (ex.rows.length) return ex.rows[0].doc;
-      const d = { name: str(body.name, 80, "họ tên"), phone: phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3"), email: "", addrs: [], consent: { zalo: false, email: false }, saved: [] };
+      const d = { name: str(body.name, 80, "họ tên"), phone: phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3"), email: "", addrs: [], consent: { zalo: false, email: false }, saved: [], tier: "standard", points: 0, spent: 0 };
       await c.query("INSERT INTO customers (phone, name, doc) VALUES ($1, $2, $3)", [phone, d.name, JSON.stringify(d)]);
       return d;
     }, { lock: false });

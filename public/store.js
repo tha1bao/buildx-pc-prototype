@@ -18,7 +18,7 @@
   add("SC01", "login", "Đăng nhập / đăng ký", "UC01", "store", () => S.user ? `<div class="wrap page" style="max-width:480px"><div class="panel"><h1>Đã đăng nhập</h1><p>${esc(S.user.name)} · ${esc(S.user.phone)}</p><a class="btn" href="#/profile">Hồ sơ của tôi</a></div></div>` : `
   <div class="wrap page" style="max-width:540px"><div class="panel" id="lg">
     <div class="row between"><h1>Đăng nhập khách hàng</h1>${tag("SC01", "UC01")}</div>
-    <p class="muted small">Hệ thống phân quyền 3 hạng tài khoản khách hàng với các chính sách giá & đặc quyền riêng biệt.</p>
+    <p class="muted small">Đăng nhập bằng số điện thoại + mã OTP (không cần mật khẩu). Cần đăng nhập để đặt hàng và theo dõi đơn.</p>
     
     <div class="tabs" style="margin-top:12px">
       <button class="tab" id="tab-login" aria-pressed="true" type="button">Đăng nhập</button>
@@ -49,23 +49,16 @@
         <summary class="small">Hoặc đăng nhập bằng số điện thoại bất kỳ (gửi OTP)</summary>
         <form id="f1" style="margin-top:10px"><div class="field"><label for="ph">Số điện thoại</label><input id="ph" type="tel" inputmode="tel" placeholder="VD: 0912 345 678" required></div><button class="btn" type="submit">Gửi mã OTP</button></form>
       </details>
-      <p class="small" style="margin-top:14px"><a href="#/cart" id="guest">Tiếp tục với tư cách khách vãng lai</a> · không hưởng chiết khấu hạng thành viên.</p>
+      <p class="small muted" style="margin-top:14px">Chưa có tài khoản? Chọn tab <b>Đăng ký tài khoản</b>. Khách chưa đăng nhập vẫn xem sản phẩm, build PC và thêm vào giỏ; khi đặt hàng sẽ được yêu cầu đăng nhập.</p>
     </div>
 
     <!-- KHỐI ĐĂNG KÝ MỚI -->
     <div id="reg-box" style="display:none;margin-top:12px">
       <form id="f-reg" class="stack" style="gap:10px">
-        <div class="field">
-          <label for="reg-tier">Loại tài khoản thành viên</label>
-          <select id="reg-tier">
-            <option value="standard">Thành viên cá nhân (Member) – Tích lũy 1%</option>
-            <option value="vip">Khách hàng thân thiết (VIP) – Giảm 2% đơn hàng</option>
-            <option value="b2b">Doanh nghiệp / Đại lý (B2B) – Giảm 5%, VAT, Công nợ</option>
-          </select>
-        </div>
+        <p class="small muted" style="margin:0">Tài khoản mới là <b>Thành viên tiêu chuẩn (Member)</b>: tích điểm 1% giá trị đơn, điểm và chi tiêu bắt đầu từ 0. Chi tiêu từ 50 triệu tự lên VIP; tài khoản doanh nghiệp B2B do cửa hàng duyệt.</p>
         <div class="field">
           <label for="reg-name">Họ và tên / Người đại diện</label>
-          <input id="reg-name" type="text" placeholder="VD: Trần Văn Nam" required>
+          <input id="reg-name" type="text" placeholder="VD: Trần Văn Nam" maxlength="80" required>
         </div>
         <div class="field">
           <label for="reg-phone">Số điện thoại (nhận mã OTP kích hoạt)</label>
@@ -73,28 +66,24 @@
         </div>
         <div class="field">
           <label for="reg-email">Email nhận hóa đơn & bảo hành</label>
-          <input id="reg-email" type="email" placeholder="nam.tran@company.com">
+          <input id="reg-email" type="email" placeholder="nam.tran@company.com" maxlength="120">
         </div>
+        <label class="row small"><input type="checkbox" id="reg-b2b"> Tôi đăng ký cho doanh nghiệp (gửi yêu cầu tài khoản B2B: giảm 5%, hóa đơn VAT, công nợ – cửa hàng duyệt trong 1 ngày làm việc)</label>
         <div id="b2b-reg-extra" style="display:none;border-left:3px solid var(--ok);padding-left:10px;margin-top:4px" class="stack">
           <div class="field">
             <label for="reg-company">Tên công ty / Tổ chức</label>
-            <input id="reg-company" type="text" placeholder="VD: Công ty TNHH Công Nghệ BuildX">
+            <input id="reg-company" type="text" placeholder="VD: Công ty TNHH Công Nghệ BuildX" maxlength="150">
           </div>
           <div class="field" style="margin-top:8px">
             <label for="reg-tax">Mã số thuế (MST xuất HĐ GTGT)</label>
-            <input id="reg-tax" type="text" placeholder="VD: 0109876543">
+            <input id="reg-tax" type="text" inputmode="numeric" placeholder="10 chữ số, VD: 0109876543" maxlength="14">
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label for="reg-caddr">Địa chỉ công ty</label>
+            <input id="reg-caddr" type="text" maxlength="250">
           </div>
         </div>
-        <div class="grid2">
-          <div class="field">
-            <label for="reg-pw">Mật khẩu</label>
-            <input id="reg-pw" type="password" placeholder="Tối thiểu 6 ký tự" required>
-          </div>
-          <div class="field">
-            <label for="reg-cpw">Xác nhận mật khẩu</label>
-            <input id="reg-cpw" type="password" placeholder="Nhập lại mật khẩu" required>
-          </div>
-        </div>
+        <p class="xs muted" id="reg-err" role="alert" style="color:var(--bad);margin:0"></p>
         <button class="btn ok" type="submit" style="margin-top:8px">Đăng ký & Nhận mã OTP</button>
       </form>
     </div>
@@ -108,26 +97,29 @@
       tReg.onclick = () => { tReg.setAttribute("aria-pressed", "true"); tLog.setAttribute("aria-pressed", "false"); rBox.style.display = "block"; lBox.style.display = "none"; };
     }
 
-    // Bật tắt trường công ty khi chọn B2B
-    const rTier = $("#reg-tier"), bExtra = $("#b2b-reg-extra");
-    if (rTier && bExtra) rTier.onchange = () => { bExtra.style.display = rTier.value === "b2b" ? "block" : "none"; };
+    // Bật tắt trường công ty khi đăng ký doanh nghiệp
+    const rB2b = $("#reg-b2b"), bExtra = $("#b2b-reg-extra");
+    if (rB2b && bExtra) rB2b.onchange = () => { bExtra.style.display = rB2b.checked ? "block" : "none"; };
 
     // Xử lý submit form đăng ký
     const fReg = $("#f-reg");
     if (fReg) fReg.onsubmit = async (e) => {
       e.preventDefault();
-      const pw = $("#reg-pw").value, cpw = $("#reg-cpw").value;
-      if (pw.length < 6) return toast("Mật khẩu phải từ 6 ký tự");
-      if (pw !== cpw) return toast("Xác nhận mật khẩu không khớp");
-      const ph = $("#reg-phone").value.trim();
-      const tier = $("#reg-tier").value;
-      const name = $("#reg-name").value.trim();
-      const email = $("#reg-email").value.trim();
-      const company = tier === "b2b" ? { name: $("#reg-company").value || name, taxId: $("#reg-tax").value || "0109999888", addr: "Hà Nội" } : null;
+      const ph = $("#reg-phone").value.trim(), name = $("#reg-name").value.trim(), email = $("#reg-email").value.trim();
+      const isB2b = $("#reg-b2b").checked;
+      const company = isB2b ? { name: $("#reg-company").value.trim(), taxId: $("#reg-tax").value.trim(), addr: $("#reg-caddr").value.trim() } : null;
+      const errs = [];
+      if (name.length < 2) errs.push("Họ tên cần ít nhất 2 ký tự.");
+      if (!/^0\d{9}$/.test(ph.replace(/[\s.-]/g, ""))) errs.push("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push("Email không hợp lệ.");
+      if (isB2b && company.name.length < 2) errs.push("Nhập tên công ty.");
+      if (isB2b && !/^\d{10}(-\d{3})?$/.test(company.taxId)) errs.push("Mã số thuế gồm 10 chữ số (chi nhánh thêm -xxx).");
+      $("#reg-err").textContent = errs.join(" ");
+      if (errs.length) return;
       const btn = $("#f-reg button[type=submit]");
       btn.disabled = true;
       try {
-        await sendOtp(ph, btn, { name, email, tier, company });
+        await sendOtp(ph, btn, { name, email, company });
       } catch (err) {
         btn.disabled = false;
         toast(err.message);
@@ -137,6 +129,7 @@
     const sendOtp = async (ph, btn, regData) => {
       if (btn) btn.disabled = true;
       let r; try { r = await API.auth("otp", { phone: ph }); } catch (err) { if (btn) btn.disabled = false; return toast(err.message); }
+      if (regData && !r.isNew) { if (btn) btn.disabled = false; return toast("Số điện thoại này đã có tài khoản. Vui lòng dùng tab Đăng nhập."); }
       const displayName = (regData && regData.name) || "";
       $("#lg").innerHTML = `<h1>Nhập mã OTP</h1><p class="muted small">Đã gửi mã 6 số tới ${esc(ph)}, hiệu lực 5 phút.</p>${r.devOtp ? `<div class="notice small">Chưa nối nhà cung cấp SMS – mã thử nghiệm: <b class="mono">${r.devOtp}</b></div>` : ""}<form id="f2"><div class="otp">${[1, 2, 3, 4, 5, 6].map((i) => `<input inputmode="numeric" maxlength="1" aria-label="Số ${i}">`).join("")}</div>${r.isNew && !displayName ? `<div class="field" style="margin-top:12px"><label for="nm">Họ tên (tài khoản mới)</label><input id="nm" type="text" required></div>` : ""}<button class="btn" type="submit" style="margin-top:12px">Xác thực tài khoản</button></form>`;
       const ins = $$(".otp input");
@@ -147,17 +140,14 @@
         try {
           const finalName = displayName || ($("#nm") ? $("#nm").value : "");
           await API.auth("verify", { phone: ph, code: ins.map((i) => i.value).join(""), name: finalName });
+          let msg = "Đăng nhập thành công";
           if (regData) {
-            try {
-              await A.run("profile.save", { name: finalName, email: regData.email || "", company: regData.company });
-            } catch (_) {}
+            msg = "Đăng ký thành công – tài khoản Member";
+            if (regData.email) { try { await API.act("profile.save", { name: finalName, email: regData.email, consent: { zalo: false, email: true } }); } catch (e) { toast(e.message); } }
+            if (regData.company) { try { await API.act("b2b.request", regData.company); msg += "; đã gửi yêu cầu tài khoản B2B, chờ cửa hàng duyệt"; } catch (e) { toast(e.message); } }
           }
           await API.refresh({ silent: true });
-          if (regData && regData.tier && S.user) {
-            S.user.tier = regData.tier;
-            if (regData.company) S.user.company = regData.company;
-          }
-          toast("Đăng nhập thành công");
+          toast(msg);
           go(S.cart.length ? "#/checkout" : "#/profile");
         }
         catch (err) { b2.disabled = false; toast(err.message); }
@@ -171,7 +161,7 @@
   add("SC02", "profile", "Hồ sơ & sổ địa chỉ", "UC01", "store", () => {
     if (!S.user) return needLogin("SC02", "UC01");
     const u = S.user, t = CUST_TIERS[u.tier] || CUST_TIERS.standard;
-    const spentNum = typeof u.spent === "number" ? u.spent : 8500000;
+    const spentNum = typeof u.spent === "number" ? u.spent : 0;
     const vipGoal = 50000000;
     const progressPct = Math.min(100, Math.round((spentNum / vipGoal) * 100));
     return `<div class="wrap page" style="max-width:880px"><div class="row between"><h1>Hồ sơ thành viên</h1>${tag("SC02", "UC01")}</div>
@@ -198,8 +188,9 @@
       <div class="panel" style="background:var(--bg);padding:10px 14px">
         <div class="row between small"><span><b>Tiến độ thăng hạng VIP Gamer Pro (mốc 50 triệu)</b></span><span>${fmt(spentNum)} / ${fmt(vipGoal)} (${progressPct}%)</span></div>
         <div style="background:var(--line);height:8px;border-radius:4px;overflow:hidden;margin-top:6px"><div style="background:var(--accent);width:${progressPct}%;height:100%"></div></div>
-        <p class="xs muted" style="margin:6px 0 0">Chi tiêu thêm ${fmt(Math.max(0, vipGoal - spentNum))} để tự động được nâng cấp lên hạng VIP (hưởng chiết khấu tự động 2% và ưu tiên xưởng).</p>
-      </div>` : u.tier === "vip" ? `
+        <p class="xs muted" style="margin:6px 0 0">Chi tiêu thêm ${fmt(Math.max(0, vipGoal - spentNum))} để tự động được nâng cấp lên hạng VIP (hưởng chiết khấu tự động 2% và ưu tiên xưởng). Điểm và chi tiêu được cộng khi đơn ở trạng thái Hoàn tất.</p>
+      </div>
+      ${u.b2bRequest && u.b2bRequest.status === "Chờ duyệt" ? `<div class="notice small">🏢 Yêu cầu tài khoản doanh nghiệp B2B cho <b>${esc(u.b2bRequest.company.name)}</b> (MST ${esc(u.b2bRequest.company.taxId)}) đang <b>chờ cửa hàng duyệt</b>.</div>` : u.b2bRequest && u.b2bRequest.status === "Từ chối" ? `<div class="notice warn small">Yêu cầu tài khoản B2B chưa được duyệt. Liên hệ cửa hàng để bổ sung giấy tờ.</div>` : `<details class="small"><summary>Đăng ký tài khoản doanh nghiệp B2B</summary><form id="fb2b" class="grid2" style="margin-top:8px"><div class="field"><label for="bq-n">Tên công ty</label><input id="bq-n" maxlength="150" required></div><div class="field"><label for="bq-t">Mã số thuế</label><input id="bq-t" inputmode="numeric" maxlength="14" required></div><div class="field" style="grid-column:1/-1"><label for="bq-a">Địa chỉ công ty</label><input id="bq-a" maxlength="250"></div><button class="btn sm" type="submit">Gửi yêu cầu duyệt</button></form></details>`}` : u.tier === "vip" ? `
       <div class="notice ok small" style="margin:4px 0">🌟 <b>Tài khoản VIP cao cấp:</b> Bạn đang hưởng mức ưu đãi đặc quyền tối đa dành cho khách hàng cá nhân (giảm trực tiếp 2% toàn bộ đơn hàng và ưu tiên lắp ráp hỏa tốc).</div>` : `
       <div class="notice ok small" style="margin:4px 0">🏢 <b>Tài khoản Doanh nghiệp B2B:</b> Được cấp quyền bởi phòng Kinh doanh BuildX với bảng giá sỉ chiết khấu 5%, xuất hóa đơn VAT và hạn mức công nợ theo hợp đồng.</div>`}
 
@@ -216,7 +207,7 @@
       <div class="row between"><h3 style="margin:0;color:var(--ok)">Thông tin Xuất hóa đơn GTGT (VAT) & Doanh nghiệp</h3><span class="pill ok">Đã xác thực B2B</span></div>
       <div class="grid2">
         <div class="field"><label>Tên công ty / Tổ chức</label><input type="text" id="b2b-comp" value="${esc((u.company && u.company.name) || u.name)}"></div>
-        <div class="field"><label>Mã số thuế (MST)</label><input type="text" id="b2b-tax" value="${esc((u.company && u.company.taxId) || "0109876543")}"></div>
+        <div class="field"><label>Mã số thuế (MST)</label><input type="text" id="b2b-tax" value="${esc((u.company && u.company.taxId) || "")}"></div>
       </div>
       <div class="field"><label>Địa chỉ xuất hóa đơn</label><input type="text" id="b2b-addr" value="${esc((u.company && u.company.addr) || (u.addrs[0] ? u.addrs[0].text : ''))}"></div>
       <p class="xs muted">Đơn hàng của tài khoản B2B sẽ tự động đính kèm hóa đơn VAT và mở quyền thanh toán công nợ 15–30 ngày.</p>
@@ -237,6 +228,7 @@
   }, () => {
     if (!S.user) return;
     $("#sv").onclick = () => quiet(run("profile.save", { name: $("#pn").value, email: $("#pe").value, consent: { zalo: $("#cz").checked, email: $("#ce").checked }, company: $("#b2b-comp") ? { name: $("#b2b-comp").value, taxId: $("#b2b-tax").value, addr: $("#b2b-addr").value } : undefined }, "Đã lưu hồ sơ"));
+    const fb = $("#fb2b"); if (fb) fb.onsubmit = (e) => { e.preventDefault(); const t = $("#bq-t").value.trim(); if (!/^\d{10}(-\d{3})?$/.test(t)) return toast("Mã số thuế gồm 10 chữ số (chi nhánh thêm -xxx)."); quiet(run("b2b.request", { name: $("#bq-n").value.trim(), taxId: t, addr: $("#bq-a").value.trim() }, "Đã gửi yêu cầu, cửa hàng sẽ duyệt")); };
     $("#lo").onclick = async () => { try { await API.auth("logout"); await API.refresh({ silent: true }); } catch (e) { toast(e.message); } go("#/home"); };
     $$("[data-def]").forEach((b) => (b.onclick = () => quiet(run("addr.def", { i: +b.dataset.def }))));
     $$("[data-del]").forEach((b) => (b.onclick = () => quiet(run("addr.del", { i: +b.dataset.del }, "Đã xóa địa chỉ"))));
@@ -311,23 +303,51 @@
   });
 
   // ================= SC07 – Khai báo nhu cầu =================
+  // Ngân sách nhập tay: chấp nhận "25000000", "25.000.000", "25,5 triệu", "25tr"
+  const BUDGET_MIN = 10000000, BUDGET_MAX = 200000000;
+  function parseBudget(raw) {
+    const t = String(raw || "").trim().toLowerCase().replace(/đ|vnd|vnđ/g, "").trim();
+    if (!t) return { err: "Vui lòng nhập ngân sách." };
+    let v;
+    const m = t.match(/^(\d+(?:[.,]\d+)?)\s*(triệu|trieu|tr|m)$/);
+    if (m) v = Math.round(parseFloat(m[1].replace(",", ".")) * 1e6);
+    else if (/^[\d.,\s]+$/.test(t)) v = Number(t.replace(/[.,\s]/g, ""));
+    else return { err: "Ngân sách chỉ gồm số (VD: 25.000.000 hoặc 25 triệu)." };
+    if (!Number.isFinite(v) || v <= 0) return { err: "Ngân sách không hợp lệ." };
+    if (v < BUDGET_MIN) return { err: `Ngân sách tối thiểu ${fmt(BUDGET_MIN)} (PC rẻ nhất hiện có khoảng 21,7 triệu).` };
+    if (v > BUDGET_MAX) return { err: `Ngân sách tối đa ${fmt(BUDGET_MAX)}; cấu hình cao hơn vui lòng liên hệ tư vấn riêng.` };
+    return { v: Math.round(v / 1000) * 1000 };
+  }
+  // Độ phân giải: lọc combo theo sức mạnh VGA (tier) tối thiểu
+  const RES_ORDER = ["1080", "1080hz", "1440", "1440uw", "2160"];
+  const RES = {
+    "1080": { label: "1080p (Full HD) 60–144Hz", short: "1080p", minTier: 1, hint: "Phổ biến nhất, mọi combo đều đáp ứng." },
+    "1080hz": { label: "1080p 240Hz (eSports thi đấu)", short: "1080p 240Hz", minTier: 1, hint: "Ưu tiên FPS rất cao trong game eSports; CPU quan trọng hơn VGA." },
+    "1440": { label: "1440p (2K QHD)", short: "1440p", minTier: 2, hint: "Cần VGA từ RTX 5060 trở lên; bỏ combo eSports." },
+    "1440uw": { label: "3440×1440 Ultrawide", short: "Ultrawide 1440p", minTier: 3, hint: "Nhiều điểm ảnh hơn 2K 34%; cần RTX 5060 Ti trở lên." },
+    "2160": { label: "4K (2160p UHD)", short: "4K", minTier: 4, hint: "Cần RTX 5070 trở lên và DLSS; chỉ BX Pro đáp ứng, nên tư vấn cấu hình riêng nếu muốn thiết lập cao." },
+  };
+  if (!RES[S.need.res]) S.need.res = "1080";
   add("SC07", "need", "Khai báo nhu cầu", "UC04", "store", () => {
     const n = S.need, purposes = [["game", "Chơi game"], ["esports", "Esports"], ["creator", "Đồ họa, dựng video, AI"], ["study", "Học tập, văn phòng"]];
     return `<div class="wrap page" style="max-width:780px"><h1>Bạn cần PC để làm gì?</h1><p class="muted small">Khoảng 1 phút. Hệ thống chọn từ các combo mẫu đã kiểm tra tương thích. ${tag("SC07", "UC04")}</p>
     <div class="panel stack" style="margin-top:12px">
-      <div class="field"><label for="bd">Ngân sách: <b id="bdv"></b></label><input id="bd" type="range" min="15000000" max="60000000" step="1000000" value="${n.budget}"></div>
+      <div class="field"><label for="bd">Ngân sách (đồng)</label><input id="bd" type="text" inputmode="numeric" autocomplete="off" placeholder="VD: 25.000.000 hoặc 25 triệu" value="${n.budget.toLocaleString("vi-VN")}" aria-describedby="bdh bde" required><span class="xs muted" id="bdh">Từ ${fmt(BUDGET_MIN)} đến ${fmt(BUDGET_MAX)}. Có thể nhập "25 triệu" hoặc "25tr".</span><span class="xs" id="bde" role="alert" style="color:var(--bad)"></span></div>
       <div><span class="lbl">Mục đích</span><div class="chips" id="pu">${purposes.map(([k, l]) => `<button type="button" class="chip" data-p="${k}" aria-pressed="${n.purpose === k}">${l}</button>`).join("")}</div></div>
       <div><span class="lbl">Game / phần mềm</span><div class="chips" id="ap"></div></div>
-      <div class="grid2"><div class="field"><label for="rs">Độ phân giải</label><select id="rs"><option value="1080" ${n.res === "1080" ? "selected" : ""}>1080p</option><option value="1440" ${n.res === "1440" ? "selected" : ""}>1440p</option></select></div>
+      <div class="grid2"><div class="field"><label for="rs">Độ phân giải màn hình</label><select id="rs">${RES_ORDER.map((k) => [k, RES[k]]).map(([k, r]) => `<option value="${k}" ${n.res === k ? "selected" : ""}>${r.label}</option>`).join("")}</select><span class="xs muted" id="rsh">${esc(RES[n.res] ? RES[n.res].hint : "")}</span></div>
       <div class="field"><label for="cl">Màu case</label><select id="cl">${["Không quan trọng", "Đen", "Trắng"].map((c) => `<option ${n.color === c ? "selected" : ""}>${c}</option>`).join("")}</select></div></div>
       <button class="btn" type="button" id="go">Xem 3 phương án</button></div></div>`;
   }, () => {
     const n = S.need;
     const drawApps = () => { $("#ap").innerHTML = APPS[n.purpose].map((a) => `<button type="button" class="chip" data-a="${esc(a)}" aria-pressed="${n.apps.includes(a)}">${esc(a)}</button>`).join(""); $$("[data-a]").forEach((b) => (b.onclick = () => { const a = b.dataset.a; n.apps = n.apps.includes(a) ? n.apps.filter((x) => x !== a) : [...n.apps, a]; drawApps(); })); };
-    const bd = () => ($("#bdv").textContent = fmt(+$("#bd").value));
-    $("#bd").oninput = bd; bd(); drawApps();
+    // Kiểm tra ngân sách khi gõ: hiện lỗi ngay dưới ô, khóa nút khi sai
+    const check = () => { const r = parseBudget($("#bd").value); $("#bde").textContent = r.err || (r.v ? "= " + fmt(r.v) : ""); $("#bde").style.color = r.err ? "var(--bad)" : "var(--muted)"; $("#bd").setAttribute("aria-invalid", r.err ? "true" : "false"); $("#go").disabled = !!r.err; return r; };
+    $("#bd").oninput = check; $("#bd").onblur = () => { const r = check(); if (!r.err) $("#bd").value = r.v.toLocaleString("vi-VN"); };
+    $("#rs").onchange = () => ($("#rsh").textContent = RES[$("#rs").value].hint);
+    check(); drawApps();
     $$("[data-p]").forEach((b) => (b.onclick = () => { n.purpose = b.dataset.p; n.apps = APPS[n.purpose].slice(0, 2); $$("[data-p]").forEach((x) => x.setAttribute("aria-pressed", x === b)); drawApps(); }));
-    $("#go").onclick = () => { n.budget = +$("#bd").value; n.res = $("#rs").value; n.color = $("#cl").value; go("#/results"); };
+    $("#go").onclick = () => { const r = check(); if (r.err) return $("#bd").focus(); n.budget = r.v; n.res = $("#rs").value; n.color = $("#cl").value; go("#/results"); };
   });
 
   // ================= SC08 – Kết quả 3 phương án =================
@@ -337,9 +357,13 @@
       if (n.color === "Trắng" && E.part(cfg, "case").color !== "Trắng") { const t = E.clone(cfg); t.case = { mode: "buy", id: "K04", qty: 1 }; if (E.worst(E.evalRules(t)) !== "bad") { Object.assign(cfg, t); note = "Đổi sang case trắng K04 (đã kiểm tra tương thích)."; } else note = "Combo này chưa có bản case trắng tương thích."; }
       return { c, cfg, price: E.cfgPrice(cfg), note }; });
     if (n.purpose === "creator") pool = pool.filter((x) => x.c.key !== "esports");
-    if (n.purpose === "esports" || n.purpose === "study") pool = pool.filter((x) => x.c.key !== "pro");
+    if ((n.purpose === "esports" || n.purpose === "study") && RES[n.res].minTier < 3) pool = pool.filter((x) => x.c.key !== "pro");
+    const minTier = RES[n.res].minTier;
+    const strong = pool.filter((x) => (byId(x.cfg.vga.id).tier || 1) >= minTier);
+    if (strong.length) pool = strong;
     pool.sort((a, b) => a.price - b.price);
     const fit = pool.filter((x) => x.price <= n.budget);
+    if (!fit.length) recommend.under = pool[0] ? pool[0].price : 0; else recommend.under = 0;
     const bal = fit.length ? fit[fit.length - 1] : pool[0];
     const i = pool.indexOf(bal);
     const lo = i > 0 ? pool[i - 1] : null, hi = pool[i + 1] || null;
@@ -347,8 +371,8 @@
   }
   add("SC08", "results", "Kết quả 3 phương án", "UC04", "store", () => {
     const r = recommend(), n = S.need;
-    return `<div class="wrap page"><a href="#/need" class="small">← Sửa nhu cầu</a><h1>3 phương án cho ngân sách ${fmt(n.budget)}</h1><p class="muted small">${esc(n.apps.join(", ") || "Chưa chọn phần mềm")} · ${n.res}p · case ${esc(n.color.toLowerCase())}. Mọi phương án đã qua toàn bộ luật tương thích. ${tag("SC08", "UC04")}</p>
-    <div class="grid3" style="margin-top:12px">${r.map(([lbl, x], i) => `<div class="card ${lbl === "Cân bằng" ? "sel" : ""}"><span class="lbl">${lbl}${lbl === "Cân bằng" ? " · gần ngân sách nhất" : ""}</span><b style="font-size:18px">${x.c.name}</b><span class="price big">${fmt(x.price)}</span><span class="small ${x.price > n.budget ? "" : "muted"}">${x.price > n.budget ? "Vượt ngân sách " + fmt(x.price - n.budget) : "Còn dư " + fmt(n.budget - x.price)}</span><span class="mono xs">${fpsLine(x.cfg)}</span>
+    return `<div class="wrap page"><a href="#/need" class="small">← Sửa nhu cầu</a><h1>${r.length < 3 ? r.length + " phương án" : "3 phương án"} cho ngân sách ${fmt(n.budget)}</h1>${recommend.under ? `<div class="notice warn small" style="margin-top:8px">Chưa có cấu hình nào vừa ngân sách ${fmt(n.budget)} cho độ phân giải ${esc(RES[n.res].short)}. Phương án rẻ nhất phù hợp là <b>${fmt(recommend.under)}</b> (vượt ${fmt(recommend.under - n.budget)}). Bạn có thể tăng ngân sách, hạ độ phân giải, hoặc <a href="#/builder">tự build</a> để bỏ bớt linh kiện.</div>` : ""}${n.res === "2160" ? `<div class="notice small" style="margin-top:8px">4K: BX Pro chơi được ở thiết lập trung bình–cao kèm DLSS. Muốn thiết lập Ultra, BuildX tư vấn cấu hình riêng (RTX 5080 trở lên, đặt theo đơn).</div>` : ""}<p class="muted small">${esc(n.apps.join(", ") || "Chưa chọn phần mềm")} · ${esc(RES[n.res].short)} · case ${esc(n.color.toLowerCase())}. Mọi phương án đã qua toàn bộ luật tương thích. ${tag("SC08", "UC04")}</p>
+    <div class="grid3" style="margin-top:12px">${r.map(([lbl, x], i) => `<div class="card ${lbl === "Cân bằng" ? "sel" : ""}"><span class="lbl">${lbl}${lbl === "Cân bằng" ? (recommend.under ? " · rẻ nhất phù hợp" : " · gần ngân sách nhất") : ""}</span><b style="font-size:18px">${x.c.name}</b><span class="price big">${fmt(x.price)}</span><span class="small ${x.price > n.budget ? "" : "muted"}">${x.price > n.budget ? "Vượt ngân sách " + fmt(x.price - n.budget) : "Còn dư " + fmt(n.budget - x.price)}</span><span class="mono xs">${fpsLine(x.cfg)}</span>
       <ul class="small" style="margin:4px 0 0;padding-left:18px">${["cpu", "vga", "ram", "case"].map((s) => `<li><b>${byId(x.cfg[s].id).n}${s === "ram" && x.cfg.ram.qty > 1 ? " ×" + x.cfg.ram.qty : ""}:</b> ${esc(byId(x.cfg[s].id).why)}</li>`).join("")}</ul>${x.note ? `<p class="xs muted">${x.note}</p>` : ""}
       <div class="row" style="margin-top:auto"><button class="btn sm" type="button" data-buy="${i}">Chọn mua</button><button class="btn sm ghost" type="button" data-tune="${i}">Tinh chỉnh ở Build PC</button></div></div>`).join("")}</div></div>`;
   }, () => {
@@ -525,8 +549,25 @@
   // ================= SC14 – Giỏ hàng =================
   const cartLines = () => S.cart;
   const cartSub = () => S.cart.reduce((t, l) => t + E.linePrice(l), 0);
+  // Đơn đã đặt hiện ngay trong giỏ hàng để khách theo dõi trạng thái (tự cập nhật khi nhân viên xử lý)
+  function placedOrders() {
+    if (!S.user) return "";
+    const list = myOrders();
+    if (!list.length) return "";
+    const flowOf = (o) => ["Mới", "Đã xác nhận", ...(o.short.length || o.preorder.length ? ["Chờ hàng"] : []), ...(o.asm ? ["Lắp ráp & QC"] : []), "Đóng gói", "Đang giao / Chờ nhận", "Hoàn tất"];
+    const active = list.filter((o) => !["Hoàn tất", "Đã hủy"].includes(o.status)), done = list.filter((o) => ["Hoàn tất", "Đã hủy"].includes(o.status));
+    const card = (o) => { const f = flowOf(o), i = f.indexOf(o.status), pct = o.status === "Đã hủy" ? 0 : Math.round(((i + 1) / f.length) * 100);
+      return `<div class="panel stack" style="gap:6px"><div class="row between"><a class="mono" href="#/order-me/${o.id}"><b>${o.id}</b></a>${stPill(o.status)}</div>
+        <div class="small">${o.lines.map((l) => `<div><b>${esc(l.title || (byId(l.id) ? byId(l.id).n : l.id))}</b>${l.qty > 1 ? " ×" + l.qty : ""}${l.cfg ? `<div class="xs muted">${esc(partsList(l.cfg))}</div>` : ""}</div>`).join("")}</div>
+        ${o.status === "Đã hủy" ? "" : `<div style="background:var(--line);height:6px;border-radius:3px;overflow:hidden"><div style="background:var(--accent);width:${pct}%;height:100%"></div></div><span class="xs muted">Bước ${i + 1}/${f.length}: ${esc(o.status)}${f[i + 1] ? " · tiếp theo: " + esc(f[i + 1]) : ""}</span>`}
+        <div class="row between small"><span>${E.dstr(o.date)} · ${esc(o.pay.method)} – ${esc(o.pay.status)}</span><b>${fmt(o.total)}</b></div>
+        ${o.status === "Mới" && o.pay.status === "Chưa thanh toán" && !["COD", "Công nợ B2B"].includes(o.pay.method) ? `<a class="btn sm" href="#/order-me/${o.id}">Thanh toán ${fmt(o.pay.due)}</a>` : ""}</div>`; };
+    return `<h2 style="margin-top:22px">Đơn đã đặt (${active.length} đang xử lý)</h2><p class="muted small">Trạng thái tự cập nhật khi cửa hàng xử lý đơn. Bấm mã đơn để xem chi tiết, báo cáo burn-in và hủy đơn.</p>
+      <div class="grid2" style="margin-top:8px">${active.map(card).join("") || '<div class="empty">Không có đơn đang xử lý.</div>'}</div>
+      ${done.length ? `<details style="margin-top:10px"><summary class="small">Đơn đã hoàn tất / đã hủy (${done.length})</summary><div class="grid2" style="margin-top:8px">${done.slice(0, 10).map(card).join("")}</div></details>` : ""}`;
+  }
   add("SC14", "cart", "Giỏ hàng", "UC08", "store", () => {
-    if (!S.cart.length) return `<div class="wrap page"><h1>Giỏ hàng</h1><div class="empty">Giỏ hàng trống. <a href="#/need">Tư vấn cấu hình</a> · <a href="#/catalog">Xem linh kiện</a></div></div>`;
+    if (!S.cart.length) return `<div class="wrap page"><h1>Giỏ hàng</h1><div class="empty">Giỏ hàng trống. <a href="#/need">Tư vấn cấu hình</a> · <a href="#/catalog">Xem linh kiện</a></div>${placedOrders()}${!S.user ? '<p class="small muted" style="margin-top:12px"><a href="#/login">Đăng nhập</a> để xem các đơn đã đặt.</p>' : ""}</div>`;
     const hasPC = S.cart.some((l) => l.type === "pc"), hasCare = S.cart.some((l) => l.code === "care"), sub = cartSub();
     const cp = S.coupon ? E.couponCheck(S.coupon, S.cart) : null;
     const pre = E.preorderItems(S.cart);
@@ -535,7 +576,7 @@
     const cpAmt = cp && cp.ok ? cp.amt : 0;
     const finalTotal = Math.max(0, sub - cpAmt - tierDisc);
     return `<div class="wrap page"><h1>Giỏ hàng</h1><p class="muted small">Thêm vào giỏ chưa giữ hàng; giá và tồn kho được kiểm tra lại khi đặt hàng. ${tag("SC14", "UC08")}</p>
-    ${uTier && uTier.discRate ? `<div class="notice ok small" style="margin-top:10px"><b>Đặc quyền ${esc(uTier.name)}:</b> Tự động giảm ${uTier.discRate * 100}% (${fmt(tierDisc)}) cho toàn đơn hàng. ${uTier.priorityAsm ? "Ưu tiên xưởng lắp ráp." : ""}</div>` : !S.user ? `<div class="notice small" style="margin-top:10px">Bạn đang mua hàng với tư cách khách vãng lai. <a href="#/login">Đăng nhập tài khoản VIP hoặc B2B</a> để nhận chiết khấu tự động đến 5%.</div>` : ""}
+    ${uTier && uTier.discRate ? `<div class="notice ok small" style="margin-top:10px"><b>Đặc quyền ${esc(uTier.name)}:</b> Tự động giảm ${uTier.discRate * 100}% (${fmt(tierDisc)}) cho toàn đơn hàng. ${uTier.priorityAsm ? "Ưu tiên xưởng lắp ráp." : ""}</div>` : !S.user ? `<div class="notice small" style="margin-top:10px">Bạn chưa đăng nhập. <a href="#/login">Đăng nhập hoặc đăng ký</a> để đặt hàng, theo dõi đơn và tích điểm (VIP giảm 2%, B2B giảm 5%).</div>` : ""}
     <div class="side" style="margin-top:12px"><div class="stack">${S.cart.map((l, i) => l.type === "pc" ? `<div class="panel"><div class="row between"><b>${esc(l.title)}</b><span class="price">${fmt(E.cfgPrice(l.cfg))}</span></div><p class="small muted" style="margin:4px 0">${esc(partsList(l.cfg))}</p>
         <div class="row between"><select data-asm="${i}" style="width:auto" aria-label="Lắp ráp"><option value="none" ${l.asm === "none" ? "selected" : ""}>Không lắp ráp</option>${E.canAssemble(l.cfg) || l.src === "upgrade" ? `<option value="shop" ${l.asm === "shop" ? "selected" : ""}>Lắp ráp${l.src === "upgrade" ? " tại cửa hàng" : " + burn-in"}: ${fmt(E.hasOwn(l.cfg) ? FEES.asmOwn : FEES.asm)}</option>` : ""}${l.src === "upgrade" ? `<option value="home" ${l.asm === "home" ? "selected" : ""}>Lắp tận nhà: ${fmt(FEES.asmOwn + FEES.homeIn)}</option>` : ""}</select><span class="row"><span class="price small">${E.asmFee(l) ? "+ " + fmt(E.asmFee(l)) : ""}</span><button class="btn sm plain" type="button" data-rm="${i}">Xóa</button></span></div></div>`
       : l.type === "part" ? `<div class="panel row between"><span><b>${esc(byId(l.id).n)}</b><br>${availPill(byId(l.id))}</span><span class="row"><input type="number" min="1" value="${l.qty}" data-q="${i}" style="width:70px" aria-label="Số lượng"><span class="price">${fmt(E.linePrice(l))}</span><button class="btn sm plain" type="button" data-rm="${i}">Xóa</button></span></div>`
@@ -546,7 +587,7 @@
       ${tierDisc ? `<div class="row between small" style="color:var(--ok)"><span>Chiết khấu ${esc(uTier.badge)}</span><span>−${fmt(tierDisc)}</span></div>` : ""}
       <div class="row" style="flex-wrap:nowrap"><input id="vc" type="text" placeholder="Mã giảm giá" value="${esc(S.coupon || "")}" aria-label="Mã giảm giá"><button class="btn sm plain" type="button" id="av">Áp dụng</button></div>
       ${cp ? `<span class="small ${cp.ok ? "" : "muted"}">${cp.ok ? "✓ " : "✗ "}${esc(cp.m)}</span>` : '<span class="xs muted">Thử mã thêm: MOBAN, HSSV, TUAN200</span>'}
-      <a class="btn" href="#/checkout">Tiến hành đặt hàng</a></div></div></div>`;
+      ${S.user ? '<a class="btn" href="#/checkout">Tiến hành đặt hàng</a>' : '<a class="btn" href="#/login">Đăng nhập để đặt hàng</a><span class="xs muted">Giỏ hàng được giữ lại sau khi đăng nhập.</span>'}</div></div>${placedOrders()}</div>`;
   }, () => {
     $$("[data-rm]").forEach((b) => (b.onclick = () => { S.cart.splice(+b.dataset.rm, 1); rerender(); }));
     $$("[data-asm]").forEach((s) => (s.onchange = () => { S.cart[+s.dataset.asm].asm = s.value; rerender(); }));
@@ -558,12 +599,14 @@
   // ================= SC15 – Thông tin nhận hàng =================
   add("SC15", "checkout", "Thông tin nhận hàng", "UC09", "store", () => {
     if (!S.cart.length) return `<div class="wrap page"><div class="empty">Giỏ hàng trống.</div></div>`;
-    const ck = S.checkout || (S.checkout = { mode: "in", name: S.user ? S.user.name : "", phone: S.user ? S.user.phone : S.me.phone || "", addr: S.user && S.user.addrs.length ? S.user.addrs.find((a) => a.def).text : "", agree: false, vat: !!(S.user && S.user.tier === "b2b") });
+    if (!S.user) return `<div class="wrap page" style="max-width:520px"><div class="panel"><h1>Đăng nhập để đặt hàng</h1><p class="muted">Đơn hàng gắn với tài khoản để bạn theo dõi trạng thái, nhận bảo hành và tích điểm. Giỏ hàng (${S.cart.length} dòng) được giữ lại. ${tag("SC15", "UC09")}</p><div class="row"><a class="btn" href="#/login">Đăng nhập / Đăng ký</a><a class="btn plain" href="#/cart">← Giỏ hàng</a></div></div></div>`;
+    if (S.checkout && S.checkout.owner !== S.user.phone) S.checkout = null;
+    const ck = S.checkout || (S.checkout = { owner: S.user.phone, mode: "in", name: S.user ? S.user.name : "", phone: S.user ? S.user.phone : S.me.phone || "", addr: S.user && S.user.addrs.length ? S.user.addrs.find((a) => a.def).text : "", agree: false, vat: !!(S.user && S.user.tier === "b2b") });
     const pre = E.preorderItems(S.cart), dep = pre.some((x) => x.grp === "C");
     const uTier = S.user ? CUST_TIERS[S.user.tier] : null;
     return `<div class="wrap page" style="max-width:900px"><h1>Thông tin nhận hàng</h1><p class="muted small">Hệ thống kiểm tra lại tồn kho khi đặt. ${tag("SC15", "UC09")}</p>
     ${uTier && uTier.priorityAsm ? `<div class="notice ok small" style="margin-top:10px">⚡ <b>Đặc quyền ${esc(uTier.name)}:</b> Đơn hàng này được gắn cờ Ưu tiên xưởng lắp ráp & QC hỏa tốc.</div>` : ""}
-    <div class="panel" style="margin-top:12px"><form id="fc"><div class="grid2"><div class="field"><label for="cn">Họ tên / Đại diện</label><input id="cn" type="text" value="${esc(ck.name)}" required></div><div class="field"><label for="cp">Điện thoại</label><input id="cp" type="tel" value="${esc(ck.phone)}" required></div></div>
+    <div class="panel" style="margin-top:12px"><form id="fc"><div class="grid2"><div class="field"><label for="cn">Họ tên / Đại diện</label><input id="cn" type="text" value="${esc(ck.name)}" required></div><div class="field"><label for="cp">SĐT người nhận</label><input id="cp" type="tel" value="${esc(ck.phone)}" required></div></div>
       <fieldset class="stack" style="gap:6px;border:0;padding:0;margin:0 0 12px"><legend class="lbl">Cách nhận</legend>
         <label class="row small"><input type="radio" name="m" value="in" ${ck.mode === "in" ? "checked" : ""}> Giao nội thành Hà Nội – miễn phí</label>
         <label class="row small"><input type="radio" name="m" value="out" ${ck.mode === "out" ? "checked" : ""}> Giao liên tỉnh – phí theo biểu phí hãng vận chuyển, báo khi xác nhận; PC đóng kiện gỗ</label>
@@ -573,16 +616,16 @@
       <div class="panel stack" style="margin:12px 0;background:var(--card)">
         <label class="row small"><b><input type="checkbox" id="cvat" ${ck.vat ? "checked" : ""}> Yêu cầu xuất hóa đơn điện tử GTGT (VAT)</b></label>
         <div id="vat-box" style="${ck.vat ? "" : "display:none"}" class="grid2">
-          <div class="field"><label>Tên công ty</label><input type="text" id="v-name" value="${esc(S.user && S.user.company ? S.user.company.name : "Công ty CP Công Nghệ NextGen")}"></div>
-          <div class="field"><label>Mã số thuế</label><input type="text" id="v-tax" value="${esc(S.user && S.user.company ? S.user.company.taxId : "0109876543")}"></div>
-          <div class="field" style="grid-column:1/-1"><label>Địa chỉ công ty</label><input type="text" id="v-addr" value="${esc(S.user && S.user.company ? S.user.company.addr : "Tầng 8, Keangnam Landmark 72, Nam Từ Liêm, Hà Nội")}"></div>
+          <div class="field"><label>Tên công ty</label><input type="text" id="v-name" maxlength="150" value="${esc(S.user && S.user.company ? S.user.company.name : "")}"></div>
+          <div class="field"><label>Mã số thuế</label><input type="text" id="v-tax" inputmode="numeric" maxlength="14" value="${esc(S.user && S.user.company ? S.user.company.taxId : "")}"></div>
+          <div class="field" style="grid-column:1/-1"><label>Địa chỉ công ty</label><input type="text" id="v-addr" maxlength="250" value="${esc(S.user && S.user.company ? S.user.company.addr : "")}"></div>
         </div>
       </div>
 
       ${pre.length ? `<div class="notice warn"><b>Thiếu hàng – cần đặt trước</b><ul class="small" style="margin:6px 0">${pre.map((x) => `<li>${esc(byId(x.id).n)}: thiếu ${x.short}, dự kiến nhập ${x.grp === "C" ? "2–3" : "1–2"} ngày${x.grp === "C" ? " (nhóm C – nhập theo đơn)" : ""}</li>`).join("")}</ul>${dep && (!S.user || S.user.tier !== "b2b") ? `<p class="small">Đơn có hàng nhóm C: cần đặt cọc 30% online trước khi BuildX nhập hàng; không áp dụng COD.</p>` : ""}<label class="row small"><input type="checkbox" id="ag" ${ck.agree ? "checked" : ""}> Tôi đồng ý đặt trước và chờ thời gian nhập hàng</label></div>` : '<div class="notice ok small">Tất cả hàng đều có sẵn.</div>'}
       <div class="row" style="margin-top:12px"><a class="btn plain" href="#/cart">← Giỏ hàng</a><button class="btn" type="submit">Tiếp tục thanh toán</button></div></form></div></div>`;
   }, () => {
-    if (!S.cart.length) return;
+    if (!S.cart.length || !S.user || !S.checkout) return;
     const ck = S.checkout;
     $$("[name=m]").forEach((r) => (r.onchange = () => { ck.name = $("#cn").value; ck.phone = $("#cp").value; ck.mode = r.value; rerender(); }));
     const cas = $("#cas"); if (cas) cas.onchange = () => { $("#ca").value = cas.value; };
@@ -596,8 +639,11 @@
       ck.agree = ag ? ag.checked : true;
       if (E.preorderItems(S.cart).length && !ck.agree) return toast("Cần đồng ý đặt trước để tiếp tục");
       if (ck.vat) {
-        ck.vatInvoice = { name: $("#v-name").value, taxId: $("#v-tax").value, addr: $("#v-addr").value };
+        ck.vatInvoice = { name: $("#v-name").value.trim(), taxId: $("#v-tax").value.trim(), addr: $("#v-addr").value.trim() };
+        if (!ck.vatInvoice.name || !ck.vatInvoice.addr) return toast("Nhập tên và địa chỉ công ty để xuất hóa đơn VAT");
+        if (!/^\d{10}(-\d{3})?$/.test(ck.vatInvoice.taxId)) return toast("Mã số thuế gồm 10 chữ số (chi nhánh thêm -xxx)");
       } else ck.vatInvoice = null;
+      if (!/^0\d{9}$/.test(ck.phone.replace(/[\s.-]/g, ""))) return toast("Số điện thoại người nhận cần 10 chữ số, bắt đầu bằng 0");
       S.guestPhone = ck.phone;
       ck.stage = "choose";
       go("#/pay");
@@ -609,6 +655,7 @@
     const ck = S.checkout;
     if (ck && ck.order && !E.findOrder(ck.order)) ck.order = null;
     if (!ck || (!S.cart.length && !ck.order)) return `<div class="wrap page"><div class="empty">Chưa có đơn để thanh toán. <a href="#/cart">Giỏ hàng</a></div></div>`;
+    if (!S.user && !ck.order) return `<div class="wrap page"><div class="empty">Vui lòng <a href="#/login">đăng nhập</a> để đặt hàng.</div></div>`;
     if (ck.stage === "otp") { const o = E.findOrder(ck.order); return `<div class="wrap page" style="max-width:520px"><div class="panel"><h1>Xác minh đơn hàng</h1><p class="small">Đơn ${o.id} có điểm rủi ro ${o.risk.score}/100 (${esc(o.risk.reasons.join("; "))}). Nhập OTP gửi tới ${esc(o.cust.phone)}. ${tag("SC16", "UC09")}</p>${ck.devOtp ? `<div class="notice small">Chưa nối nhà cung cấp SMS – mã thử nghiệm: <b class="mono">${ck.devOtp}</b></div>` : ""}<div class="otp" style="margin-top:10px">${[1, 2, 3, 4, 5, 6].map((i) => `<input inputmode="numeric" maxlength="1" aria-label="Số ${i}">`).join("")}</div><div class="row" style="margin-top:12px"><button class="btn" type="button" id="vo">Xác minh</button><button class="btn plain" type="button" id="rs">Gửi lại mã</button></div></div></div>`; }
     if (ck.stage === "gateway") { const o = E.findOrder(ck.order); return `<div class="wrap page" style="max-width:560px"><div class="panel stack"><span class="lbl">Cổng ${esc(o.pay.method)} · môi trường thử (sandbox)</span><h1>${o.pay.due < o.total ? "Đặt cọc 30%" : "Thanh toán"} ${fmt(o.pay.due)}</h1><p class="small muted">Đơn ${o.id} · tổng ${fmt(o.total)}. Đơn chỉ được đánh dấu đã thanh toán khi máy chủ BuildX xác thực thông báo (IPN) hợp lệ từ cổng, không dựa vào trang trả về của trình duyệt.</p><div class="row"><button class="btn" type="button" id="ok">Mô phỏng: thanh toán thành công</button><button class="btn plain" type="button" id="ko">Mô phỏng: khách hủy</button></div><p class="xs muted">${tag("SC16", "UC09")}</p></div></div>`; }
     const pre = E.preorderItems(S.cart), dep = pre.some((x) => x.grp === "C");
@@ -644,8 +691,8 @@
       po.disabled = true;
       try {
         const r = await API.act("order.create", { cust: { name: ck.name, phone: ck.phone, addr: ck.addr }, lines: S.cart, ship: { mode: ck.mode }, coupon: S.coupon, payMethod: m, agreePreorder: !!ck.agree, vatInvoice: ck.vatInvoice || null });
-        S.cart = []; S.coupon = null; ck.order = r.id; ck.devOtp = r.devOtp; S.lastOrder = r.id;
-        if (m === "COD" || m === "Công nợ B2B") return go("#/done");
+        S.cart = []; S.coupon = null; ck.order = r.id; ck.devOtp = r.devOtp; ck.method = null; S.lastOrder = r.id;
+        if (m === "COD" || m === "Công nợ B2B") { S.checkout = null; return go("#/done"); }
         ck.stage = r.needOtp ? "otp" : "gateway"; rerender();
       } catch (e) { po.disabled = false; toast(e.message); }
     };

@@ -104,6 +104,8 @@ async function loadState(c) {
   st.staffUsers = su.rows.map((u) => ({ name: u.name, email: u.email, role: u.role, on: u.active }));
   st.seq = Object.assign(st.seq, (await getMeta(c, "seq")) || {});
   snap.seq = JSON.stringify(st.seq);
+  st.ruleCfg = require("../public/engine.js").normRuleCfg(await getMeta(c, "rules"));
+  snap.rules = JSON.stringify(st.ruleCfg);
   return { st, snap };
 }
 
@@ -123,6 +125,8 @@ async function saveState(c, st, snap) {
   const fresh = st.log.filter((l) => !l.id).reverse();
   for (const l of fresh) await c.query("INSERT INTO audit_log (at, who, action, target) VALUES ($1, $2, $3, $4)", [new Date(l.t), l.who, l.action, l.target || ""]);
   if (JSON.stringify(st.seq) !== snap.seq) await setMeta(c, "seq", st.seq);
+  const rulesChanged = snap.rules !== undefined && JSON.stringify(st.ruleCfg) !== snap.rules;
+  if (rulesChanged) { await setMeta(c, "rules", st.ruleCfg); changed++; }
   if (changed || fresh.length) await c.query("INSERT INTO app_meta (key, value) VALUES ('version', '1') ON CONFLICT (key) DO UPDATE SET value = to_jsonb((app_meta.value)::int + 1)");
   return changed;
 }

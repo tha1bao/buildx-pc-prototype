@@ -24,6 +24,8 @@ function client() {
     auth: (op, data) => call("/api/auth", Object.assign({ op }, data)),
   };
 }
+// Đăng nhập khách bằng OTP (tạo tài khoản nếu SĐT mới)
+async function login(c, phone, name) { const o = await c.auth("otp", { phone }); const v = await c.auth("verify", { phone, code: o.devOtp, name: name || "Khách " + phone }); if (v._status !== 200) throw new Error("login " + v.error); return c; }
 const ok = (r) => { assert.ok(r.ok !== false && r._status === 200, `HTTP ${r._status}: ${r.error}`); return r; };
 const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị từ chối"); if (re) assert.match(r.error, re); return r; };
 
@@ -43,7 +45,15 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
   console.log("Khách đặt hàng → nhân viên thấy và xử lý");
   const khach = client(), quanly = client(), ktv = client(), banhang = client();
   let orderId;
-  await t("khách vãng lai đặt combo BX Esports (COD) qua website", async () => {
+  await t("chưa đăng nhập thì không đặt được hàng (cả khi gọi thẳng API)", async () => {
+    err(await khach.act("order.create", { cust: { name: "Khách Kiểm Thử", phone: "0901234567", addr: "1 Cầu Giấy" }, lines: [{ type: "part", id: "R01", qty: 1 }], payMethod: "COD" }), /đăng nhập/);
+  });
+  await t("tài khoản mới: hạng Member, điểm và chi tiêu bằng 0", async () => {
+    await login(khach, "0901234567", "Khách Kiểm Thử");
+    const s = ok(await khach.state());
+    assert.strictEqual(s.user.tier, "standard"); assert.strictEqual(s.user.points, 0); assert.strictEqual(s.user.spent, 0);
+  });
+  await t("khách đã đăng nhập đặt combo BX Esports (COD) qua website", async () => {
     const lines = [{ type: "pc", title: "BX Esports", src: "combo", cfg: E.cfgFromCombo("esports"), asm: "shop" }];
     const r = ok(await khach.act("order.create", { cust: { name: "Khách Kiểm Thử", phone: "0901234567", addr: "1 Cầu Giấy" }, lines, ship: { mode: "in" }, payMethod: "COD" }));
     orderId = r.result.id;
@@ -63,7 +73,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     err(await khach.act("order.create", { cust: { name: "A", phone: "0901234567", addr: "x" }, lines: [{ type: "pc", src: "build", cfg, asm: "none" }], payMethod: "COD" }), /không tương thích/);
   });
   await t("khách khác không xem được đơn của người khác", async () => {
-    const la = client();
+    const la = await login(client(), "0909888777");
     const s = ok(await la.state());
     assert.ok(!s.orders.some((o) => o.id === orderId));
     err(await la.act("order.cancelMine", { id: orderId }), /quyền/);
@@ -122,6 +132,42 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     assert.strictEqual(s.warranties.filter((w) => w.order === orderId).length, held.length);
   });
 
+  await t("đơn hoàn tất cộng 1% điểm và tổng chi tiêu vào tài khoản", async () => {
+    const s = ok(await khach.state()), o = s.orders.find((x) => x.id === orderId);
+    assert.strictEqual(s.user.spent, o.total);
+    assert.strictEqual(s.user.points, Math.floor(o.total * 0.01 / 1000));
+  });
+  await t("đăng ký mới không tự chọn được VIP/B2B; gửi yêu cầu B2B, quản lý duyệt", async () => {
+    const c = await login(client(), "0977123456", "Người Mới");
+    err(await c.act("b2b.request", { name: "Cty A", taxId: "123" }), /Mã số thuế/);
+    ok(await c.act("b2b.request", { name: "Cty TNHH A", taxId: "0101234567", addr: "Hà Nội" }));
+    assert.strictEqual(ok(await c.state()).user.tier, "standard");
+    const sq = ok(await quanly.state());
+    assert.ok(sq.requests.some((r) => r.b2b === "0977123456"));
+    ok(await quanly.act("customer.setTier", { phone: "0977123456", tier: "b2b" }));
+    const u = ok(await c.state()).user;
+    assert.strictEqual(u.tier, "b2b"); assert.strictEqual(u.company.taxId, "0101234567");
+  });
+
+  console.log("Luật tương thích do quản lý chỉnh");
+  await t("chỉ Quản lý sửa được luật; giá trị ngoài giới hạn bị từ chối", async () => {
+    err(await ktv.act("rules.update", { levels: { R1: "off" } }), /quyền|Quản lý/);
+    err(await quanly.act("rules.update", { params: { psuReserve: 500 } }), /giới hạn/);
+    err(await quanly.act("rules.update", { levels: { R1: "abc" } }), /không hợp lệ/);
+  });
+  await t("hạ R1 xuống 'chỉ cảnh báo' thì máy chủ cho đặt cấu hình lệch socket; khôi phục thì chặn lại", async () => {
+    const cfg = E.cfgFromCombo("esports"); cfg.cpu = { mode: "buy", id: "C04", qty: 1 };
+    const body = { cust: { name: "Khách Kiểm Thử", phone: "0901234567", addr: "1 Cầu Giấy" }, lines: [{ type: "pc", src: "build", title: "Thử luật", cfg, asm: "none" }], payMethod: "COD" };
+    const r = ok(await quanly.act("rules.update", { levels: { R1: "warn" }, params: { psuReserve: 40 } }));
+    assert.strictEqual(r.state.ruleCfg.levels.R1, "warn"); assert.strictEqual(r.state.ruleCfg.params.psuReserve, 40);
+    assert.ok(ok(await khach.state()).ruleCfg.levels.R1 === "warn", "khách nhận cấu hình luật mới");
+    const o = ok(await khach.act("order.create", body));
+    ok(await khach.act("order.cancelMine", { id: o.result.id }));
+    ok(await quanly.act("rules.reset", {}));
+    err(await khach.act("order.create", body), /không tương thích/);
+    assert.ok(ok(await quanly.state()).log.some((l) => /Sửa luật tương thích/.test(l.action)));
+  });
+
   console.log("Tồn kho: không bán vượt số có");
   await t("hai khách tranh mua chiếc RTX 5070 Ti cuối cùng: chỉ một người được giữ hàng", async () => {
     const s0 = ok(await quanly.state());
@@ -129,7 +175,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     // dồn kho G05 về đúng 1 chiếc
     if (left > 1) ok(await quanly.act("stock.adjust", { id: "G05", qty: -(left - 1), reason: "Kiểm kê lệch" }));
     if (left === 0) ok(await quanly.act("stock.receive", { id: "G05", qty: 1, invoice: "HĐ TEST" }));
-    const a = client(), b = client();
+    const a = await login(client(), "0911111111"), b = await login(client(), "0922222222");
     const mkOrder = (c, ph) => c.act("order.create", { cust: { name: "Khách " + ph, phone: ph, addr: "Pickup" }, lines: [{ type: "part", id: "G05", qty: 1 }], ship: { mode: "pickup" }, payMethod: "COD" });
     const [oa, ob] = await Promise.all([mkOrder(a, "0911111111"), mkOrder(b, "0922222222")]);
     ok(oa); ok(ob);
@@ -163,7 +209,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
 
   console.log("Thanh toán online, OTP, POS, dịch vụ");
   await t("đơn online chỉ được xác nhận sau khi cổng báo đã thanh toán", async () => {
-    const c = client();
+    const c = await login(client(), "0933333333");
     const r = ok(await c.act("order.create", { cust: { name: "Online", phone: "0933333333", addr: "2 Duy Tân" }, lines: [{ type: "part", id: "R01", qty: 1 }], payMethod: "VNPAY" }));
     err(await quanly.act("order.confirm", { id: r.result.id }), /thanh toán/);
     ok(await c.act("order.pay", { id: r.result.id, result: "ok" }));
@@ -217,7 +263,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     const ord = r.state.orders.find((x) => x.id === r.result.id), sub = BX.P.find((p) => p.id === "S01").price * 2;
     assert.strictEqual(ord.tierDisc, Math.round(sub * 0.02 / 1000) * 1000);
     assert.strictEqual(ord.total, sub - ord.tierDisc);
-    err(await client().act("order.create", { cust: { name: "Giả B2B", phone: "0966666666", addr: "x" }, lines, payMethod: "Công nợ B2B" }), /B2B/);
+    err(await (await login(client(), "0966666666")).act("order.create", { cust: { name: "Giả B2B", phone: "0966666666", addr: "x" }, lines, payMethod: "Công nợ B2B" }), /B2B/);
   });
   await t("doanh nghiệp B2B: giảm 5%, hóa đơn VAT, công nợ; nhân viên đổi hạng khách", async () => {
     const b = client();
