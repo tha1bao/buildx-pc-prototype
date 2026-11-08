@@ -714,6 +714,18 @@ async function handleAuth(body, req, res, sess) {
     await auth.setCust(res, req, Object.assign(sess.cust, { phone: r.rows[0].doc.phone || phone, verified: true }));
     return send(res, 200, { ok: true, kind: "customer", name: r.rows[0].name, first: false });
   }
+  if (op === "custChangePassword") {
+    if (!sess.cust.verified || !sess.cust.phone) fail("Cần đăng nhập.", 401);
+    const phone = normPhone(sess.cust.phone);
+    const r = await db.q("SELECT pass_hash FROM customers WHERE phone = $1", [phone]);
+    if (!r.rows.length) fail("Không tìm thấy tài khoản.", 404);
+    if (!r.rows[0].pass_hash) fail("Tài khoản chưa có mật khẩu. Đăng xuất rồi chọn \"Quên mật khẩu\" để tạo bằng mã OTP.", 409);
+    if (!auth.checkPassword(String(body.old || ""), r.rows[0].pass_hash)) fail("Mật khẩu hiện tại không đúng.", 401);
+    const pw = checkStrong(body.password, "Mật khẩu mới");
+    if (pw === String(body.old)) fail("Mật khẩu mới phải khác mật khẩu hiện tại.");
+    await db.q("UPDATE customers SET pass_hash = $2, updated_at = now() WHERE phone = $1", [phone, auth.hashPassword(pw)]);
+    return send(res, 200, { ok: true });
+  }
   if (op === "logout") { auth.clear(res, req, auth.C_COOKIE); return send(res, 200, { ok: true }); }
   if (op === "staffLogin") {
     const email = String(body.email || "").trim().toLowerCase();

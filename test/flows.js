@@ -217,6 +217,17 @@ const fmt = (n) => n.toLocaleString("vi-VN") + "đ";
     return `chi tiêu ${fmt(s.user.spent)} ≥ 50 triệu → tự lên VIP (đơn ${o.id})`;
   });
 
+  await t("TC-SC01-15", async () => "điều hướng sau đăng nhập kiểm ở trình duyệt");
+  await t("TC-SC02-10", async () => {
+    const ph = newPhone(), c = await login(client(), ph);
+    err(await c.auth("custChangePassword", { old: "SaiCu1234", password: "MoiMoi2026" }), /hiện tại không đúng/);
+    err(await c.auth("custChangePassword", { old: TEST_PW, password: "12345678" }), /chữ và số/);
+    err(await c.auth("custChangePassword", { old: TEST_PW, password: TEST_PW }), /phải khác/);
+    err(await client().auth("custChangePassword", { old: TEST_PW, password: "MoiMoi2026" }), /đăng nhập/);
+    ok(await c.auth("custChangePassword", { old: TEST_PW, password: "MoiMoi2026" }));
+    err(await client().auth("login", { id: ph, password: TEST_PW }), /không đúng/); ok(await client().auth("login", { id: ph, password: "MoiMoi2026" }));
+    return "sai mật khẩu hiện tại / mật khẩu yếu / trùng cũ / chưa đăng nhập đều bị từ chối; đổi đúng thì mật khẩu cũ hết hiệu lực";
+  });
   console.log("SC03 Cấu hình đã lưu");
   await t("TC-SC03-01", async () => "khách chưa đăng nhập lưu ở localStorage (bx_saved); kiểm tra ở test UI");
   let savedCode;

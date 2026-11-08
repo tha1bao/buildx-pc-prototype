@@ -72,6 +72,26 @@ const fmtNum = (v) => v.toLocaleString("vi-VN");
   await t("TC-SC01-11", async () => { const q = await newPage(); await go(q, "#/item/R01"); await q.click("#buy"); await nav(q, "#/item/S01"); await q.click("#buy"); await loginForm(q, "0905 112 233", "Khach@2026"); const cart = await S(q, () => BXE.S.cart.length); const h = await q.evaluate(() => location.hash); await q.context().close(); assert.strictEqual(cart, 2); assert.strictEqual(h, "#/home"); return "giỏ còn 2 món sau đăng nhập; khách về Trang chủ"; });
   await t("TC-SC02-01", async () => { await go(p, "#/profile"); assert.ok(await p.locator("text=Cần đăng nhập").count()); return "hiện 'Cần đăng nhập'"; });
 
+  await t("TC-SC01-15", async () => {
+    const q = await newPage(); await go(q, "#/item/R01"); await q.click("#buy"); await nav(q, "#/cart"); await q.click("a.btn:has-text('Đăng nhập để đặt hàng')"); await q.waitForTimeout(200);
+    if (await q.locator("#tab-login").count()) await q.click("#tab-login");
+    await q.fill("#lg-id", "0905112233"); await q.fill("#lg-pw", "Khach@2026"); await q.click("#f-login button[type=submit]"); await q.waitForTimeout(900);
+    const h1 = await q.evaluate(() => location.hash), cart = await S(q, () => BXE.S.cart.length), title = await q.locator("h1").first().innerText(); await q.context().close();
+    const q2 = await newPage(); await go(q2, "#/item/R01"); await q2.click("#buy"); await nav(q2, "#/cart"); await q2.click("a.btn:has-text('Đăng nhập để đặt hàng')"); await q2.waitForTimeout(200); await q2.click("#tab-reg"); await q2.waitForTimeout(100);
+    await q2.fill("#reg-name", "Khách Từ Giỏ"); await q2.fill("#reg-phone", newPhone()); await q2.fill("#reg-pw", "Matkhau123"); await q2.fill("#reg-pw2", "Matkhau123"); await q2.click("#f-reg button[type=submit]"); await fillOtp(q2); await q2.click("#f-reg2 button[type=submit]"); await q2.waitForTimeout(900);
+    const h2 = await q2.evaluate(() => location.hash); await q2.context().close();
+    assert.strictEqual(h1, "#/checkout"); assert.strictEqual(cart, 1); assert.strictEqual(h2, "#/checkout");
+    return `đăng nhập từ giỏ → quay lại '${title}' (giỏ còn ${cart} món); đăng ký mới từ giỏ cũng quay lại đặt hàng; đăng nhập từ nút trên thanh menu vẫn về Trang chủ (TC-SC01-07)`;
+  });
+  await t("TC-SC02-10", async () => {
+    const q = await newPage(); const ph = newPhone(); await go(q, "#/home"); await custRegister(q, ph, "Đổi Mật Khẩu"); await go(q, "#/profile");
+    const tryCp = async (o, n, n2) => { await q.fill("#cp-old", o); await q.fill("#cp-new", n); await q.fill("#cp-new2", n2); await q.click("#fcp button[type=submit]"); await q.waitForTimeout(500); return q.locator("#cp-err").innerText(); };
+    const m = [await tryCp("SaiCu1234", "MoiMoi2026", "MoiMoi2026"), await tryCp("Matkhau123", "abcdefgh", "abcdefgh"), await tryCp("Matkhau123", "MoiMoi2026", "MoiMoi2027")];
+    await tryCp("Matkhau123", "MoiMoi2026", "MoiMoi2026"); const tt = await q.locator("#toast").innerText(); await q.context().close();
+    const q2 = await newPage(); await go(q2, "#/home"); await loginForm(q2, ph, "MoiMoi2026"); const ok2 = await S(q2, () => !!BXE.S.user); await q2.context().close();
+    assert.ok(m.every((x) => x)); assert.match(tt, /Đã đổi mật khẩu/); assert.ok(ok2);
+    return m.join(" · ") + " · đổi đúng: '" + tt + "', đăng nhập lại bằng mật khẩu mới được";
+  });
   console.log("SC03 / SC10 lưu, chia sẻ");
   await t("TC-SC03-01", async () => { await go(p, "#/combo/gamer"); await p.click("#tune"); await nav(p, "#/summary"); await p.click("#sv"); const m = await toast(p); await nav(p, "#/saved"); const n1 = await p.locator("[data-open]").count(); assert.ok(n1 >= 1); return `${m}; SC03 có ${n1} cấu hình`; });
   await t("TC-SC03-03", async () => { await p.locator("[data-open]").first().click(); await p.waitForTimeout(300); const h = await p.evaluate(() => location.hash); const vga = await S(p, () => BXE.S.build.vga.id); assert.ok(vga); assert.strictEqual(h, "#/builder"); return `mở lại vào Build PC (${h}) với đủ linh kiện, VGA ${vga}`; });
