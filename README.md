@@ -11,7 +11,7 @@ Từ bản 2.0, dữ liệu không còn nằm trong bộ nhớ trang: **đơn h�
 | `public/` | Giao diện (JS thuần, router theo hash): `data.js` linh kiện, giá, combo; `engine.js` luật tương thích và nghiệp vụ đơn/kho **dùng chung cho trình duyệt và máy chủ**; `api-client.js` đồng bộ với máy chủ; `store.js` 21 màn khách; `admin.js` 21 màn nhân viên |
 | `api/` | 4 Vercel Function: `auth`, `state`, `version`, `action` |
 | `server/` | `api.js` thao tác nghiệp vụ và kiểm tra quyền; `db.js` bảng và giao dịch; `auth.js` phiên cookie ký HMAC, băm mật khẩu scrypt, OTP; `seed.js` dữ liệu mẫu; `dev.js` máy chủ chạy tại máy |
-| `test/run.js` | 46 ca kiểm thử với CSDL thật |
+| `test/run.js` | 54 ca kiểm thử với CSDL thật |
 
 Nguyên tắc:
 
@@ -36,6 +36,14 @@ npm install
 DATABASE_URL=postgres://user:pass@localhost:5432/buildx npm run dev   # http://localhost:3000
 DATABASE_URL=postgres://user:pass@localhost:5432/buildx_test npm test # CSDL kiểm thử, sẽ bị xóa sạch
 ```
+
+## Nghiệp vụ tài khoản và luật (bản 2.1)
+
+- **Phải đăng nhập (SĐT + OTP) mới đặt được hàng**; khách chưa đăng nhập vẫn xem, build PC và thêm vào giỏ (giỏ giữ lại sau đăng nhập). Đơn gắn với tài khoản, SĐT người nhận có thể khác.
+- **Đăng ký mới luôn là Member** với điểm và chi tiêu bằng 0. Đơn **Hoàn tất** cộng 1% giá trị đơn thành điểm (1 điểm = 1.000đ) và cộng tổng chi tiêu; Member chi tiêu từ 50 triệu tự lên VIP. Tài khoản doanh nghiệp B2B: khách gửi yêu cầu kèm mã số thuế, Quản lý/Quản trị viên duyệt ở màn Người dùng.
+- **Quản lý chỉnh luật tương thích** ở màn SC35: mỗi luật R1–R8 chọn *Chặn theo thiết kế / Chỉ cảnh báo / Tắt*, sửa % dự phòng nguồn, công suất nền, khoảng chừa VGA–case, bật/tắt cảnh báo bus RAM và công suất tản. Cấu hình lưu trong CSDL (`app_meta.rules`), áp dụng ngay cho Build PC, giỏ hàng, POS và kiểm tra đơn ở máy chủ; mỗi thay đổi ghi nhật ký. 24 ca kiểm thử luôn chạy trên bộ luật mặc định, kèm cột "theo cấu hình hiện tại".
+- **Giỏ hàng** hiện mục "Đơn đã đặt" với sản phẩm/combo, tiến trình và trạng thái từng đơn (tự cập nhật).
+- **Tư vấn nhu cầu**: ngân sách nhập tay (10–200 triệu, chấp nhận "25.000.000", "25 triệu", "25tr", báo lỗi ngay dưới ô); độ phân giải 1080p, 1080p 240Hz, 2K, Ultrawide, 4K, lọc combo theo sức mạnh VGA.
 
 ## Tài khoản demo
 

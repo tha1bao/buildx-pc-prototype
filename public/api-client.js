@@ -24,6 +24,7 @@ window.BXAPI = (function () {
     S.user = s.user || null;
     S.me = s.me || { phone: "", orderIds: [], verified: false };
     S.saved = S.user ? S.user.saved || (S.user.saved = []) : guestSaved;
+    st.ruleCfg = s.ruleCfg || st.ruleCfg;
     if (typeof s.v === "number") v = s.v;
     ready = true; offline = null;
   }

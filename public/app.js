@@ -120,7 +120,7 @@ window.BXA = (function () {
 
   let current = null;
   function route() {
-    const h = location.hash.replace(/^#\/?/, "") || "map";
+    const h = location.hash.replace(/^#\/?/, "") || "home";
     const [p, ...rest] = h.split("/");
     const param = rest.join("/") || undefined;
     const scr = SCREENS.find((s) => s.path === p) || SCREENS.find((s) => s.path === "map");

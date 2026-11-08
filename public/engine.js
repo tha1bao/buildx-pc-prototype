@@ -13,8 +13,25 @@
   "use strict";
 
   // Dữ liệu vận hành (lưu trong CSDL). Trình duyệt giữ một bản sao theo quyền của người xem.
+  // Cấu hình luật tương thích mặc định. Quản lý chỉnh ở màn SC35; máy chủ lưu trong CSDL (app_meta.rules).
+  // level: "block" = như thiết kế (chặn cứng / cảnh báo theo bảng), "warn" = mọi lỗi của luật chỉ còn cảnh báo, "off" = tắt luật.
+  const DEFAULT_RULE_CFG = {
+    levels: { R1: "block", R2: "block", R3: "block", R4: "block", R5: "block", R6: "block", R7: "block", R8: "block" },
+    params: { psuReserve: 30, baseLoad: 75, ramBusWarn: true, coolTdpWarn: true, caseGpuMargin: 0 },
+  };
+  const PARAM_LIMITS = { psuReserve: [0, 100], baseLoad: [0, 300], caseGpuMargin: [0, 50] };
+  function normRuleCfg(x) {
+    const out = JSON.parse(JSON.stringify(DEFAULT_RULE_CFG));
+    if (!x || typeof x !== "object") return out;
+    Object.keys(out.levels).forEach((k) => { if (x.levels && ["block", "warn", "off"].includes(x.levels[k])) out.levels[k] = x.levels[k]; });
+    Object.keys(PARAM_LIMITS).forEach((k) => { const v = Number(x.params && x.params[k]); if (Number.isFinite(v) && v >= PARAM_LIMITS[k][0] && v <= PARAM_LIMITS[k][1]) out.params[k] = Math.round(v); });
+    ["ramBusWarn", "coolTdpWarn"].forEach((k) => { if (x.params && typeof x.params[k] === "boolean") out.params[k] = x.params[k]; });
+    return out;
+  }
+
   function emptyState() {
     return {
+      ruleCfg: JSON.parse(JSON.stringify(DEFAULT_RULE_CFG)),
       orders: [], units: [], pos: [], requests: [], rma: [], warranties: [], coupons: [], log: [], staffUsers: [],
       availMap: null, // khách hàng không thấy serial, chỉ nhận số lượng khả dụng theo mã
       seq: { order: 140, po: 230, sn: 1000, rma: 300, req: 500, dv: 8811, bh: 3304, tv: 1119, wb: 77300 },
@@ -44,7 +61,8 @@
     const sticks = (c) => { const r = part(c, "ram"); let n = r ? c.ram.qty : 0; c.extras.forEach((e) => { if (byId(e.id).cat === "ram") n += e.qty; }); return n; };
     const ramGb = (c) => { const r = part(c, "ram"); let g = r ? r.gb * c.ram.qty : 0; c.extras.forEach((e) => { const x = byId(e.id); if (x.cat === "ram") g += x.gb * e.qty; }); return g; };
     const drives = (c, form) => { let n = 0; const s = part(c, "ssd"); if (s && s.form === form) n++; c.extras.forEach((e) => { const x = byId(e.id); if (x.cat === "ssd" && x.form === form) n += e.qty; }); return n; };
-    const load = (c) => { const cpu = part(c, "cpu"), vga = part(c, "vga"); return (cpu ? cpu.w : 0) + (vga ? vga.w : 0) + 75; };
+    const RC = () => (st.ruleCfg = st.ruleCfg && st.ruleCfg.levels ? st.ruleCfg : normRuleCfg(st.ruleCfg));
+    const load = (c) => { const cpu = part(c, "cpu"), vga = part(c, "vga"); return (cpu ? cpu.w : 0) + (vga ? vga.w : 0) + RC().params.baseLoad; };
 
     // Luật: trả về danh sách { r, lv: "ok"|"warn"|"bad", slots, m }
     const RULES = [
@@ -59,6 +77,15 @@
     ];
     const fmtW = (w) => w + " W";
     function evalRules(c) {
+      const cfg = RC(), out = [];
+      rawRules(c, cfg.params).forEach((x) => {
+        const lv = cfg.levels[x.r] || "block";
+        if (lv === "off") return;
+        out.push(lv === "warn" && x.lv === "bad" ? Object.assign({}, x, { lv: "warn", m: x.m + " (quản lý đặt luật này ở mức chỉ cảnh báo)" }) : x);
+      });
+      return out;
+    }
+    function rawRules(c, prm) {
       const out = [], main = part(c, "main"), cpu = part(c, "cpu"), ram = part(c, "ram"), vga = part(c, "vga"), cool = part(c, "cool"), cs = part(c, "case"), psu = part(c, "psu");
       const add = (r, lv, slots, m) => out.push({ r, lv, slots, m });
       if (cpu && main) add("R1", cpu.socket === main.socket ? "ok" : "bad", ["cpu", "main"], cpu.socket === main.socket ? `CPU và mainboard cùng socket ${cpu.socket}.` : `CPU dùng ${cpu.socket}, mainboard là ${main.socket}.`);
@@ -70,22 +97,22 @@
         if (n > main.slots) add("R2", "bad", ["ram", "main"], `Cần ${n} khe RAM, mainboard chỉ có ${main.slots} khe.`);
         if (ramGb(c) > main.maxRam) add("R2", "bad", ["ram", "main"], `Tổng ${ramGb(c)}GB vượt tối đa ${main.maxRam}GB của mainboard.`);
         const fast = types.find((x) => x.bus > main.bus);
-        if (fast && !wrong) add("R2", "warn", ["ram", "main"], `RAM bus ${fast.bus} sẽ chạy ở ${main.bus} MHz trên mainboard này.`);
+        if (fast && !wrong && prm.ramBusWarn) add("R2", "warn", ["ram", "main"], `RAM bus ${fast.bus} sẽ chạy ở ${main.bus} MHz trên mainboard này.`);
       }
       if (main && cs) add("R3", cs.ff.includes(main.ff) ? "ok" : "bad", ["main", "case"], cs.ff.includes(main.ff) ? `Case nhận mainboard ${main.ff}.` : `Case chỉ nhận ${cs.ff.join("/")}, mainboard là ${main.ff}.`);
-      if (vga && cs) add("R4", vga.len <= cs.gpu ? "ok" : "bad", ["vga", "case"], vga.len <= cs.gpu ? `VGA dài ${vga.len} mm, case cho tối đa ${cs.gpu} mm.` : `VGA dài ${vga.len} mm vượt giới hạn ${cs.gpu} mm của case.`);
+      if (vga && cs) { const lim = cs.gpu - prm.caseGpuMargin; add("R4", vga.len <= lim ? "ok" : "bad", ["vga", "case"], vga.len <= lim ? `VGA dài ${vga.len} mm, case cho tối đa ${cs.gpu} mm${prm.caseGpuMargin ? ` (chừa ${prm.caseGpuMargin} mm đi dây)` : ""}.` : `VGA dài ${vga.len} mm vượt giới hạn ${lim} mm của case${prm.caseGpuMargin ? ` (${cs.gpu} mm trừ ${prm.caseGpuMargin} mm đi dây)` : ""}.`); }
       if (cool) {
         if (cpu) add("R5", cool.sockets.includes(cpu.socket) ? "ok" : "bad", ["cool", "cpu"], cool.sockets.includes(cpu.socket) ? `Tản hỗ trợ socket ${cpu.socket}.` : `Tản không có ngàm cho socket ${cpu.socket}.`);
         if (cs) {
           if (cool.rad) add("R5", cool.rad <= cs.rad ? "ok" : "bad", ["cool", "case"], cool.rad <= cs.rad ? `Case lắp được radiator ${cool.rad} mm.` : `Case không có chỗ cho radiator ${cool.rad} mm (tối đa ${cs.rad || 0} mm).`);
           else add("R5", cool.h <= cs.cool ? "ok" : "bad", ["cool", "case"], cool.h <= cs.cool ? `Tản cao ${cool.h} mm, case cho tối đa ${cs.cool} mm.` : `Tản cao ${cool.h} mm, case chỉ cho ${cs.cool} mm.`);
         }
-        if (cpu && cool.tdp < cpu.w) add("R5", "warn", ["cool", "cpu"], `CPU tối đa ~${cpu.w} W, tản chỉ ~${cool.tdp} W: có thể giảm xung khi tải nặng.`);
+        if (cpu && cool.tdp < cpu.w && prm.coolTdpWarn) add("R5", "warn", ["cool", "cpu"], `CPU tối đa ~${cpu.w} W, tản chỉ ~${cool.tdp} W: có thể giảm xung khi tải nặng.`);
       }
       if (psu && (cpu || vga)) {
-        const L = load(c), need = Math.round(L * 1.3);
+        const L = load(c), need = Math.round(L * (1 + prm.psuReserve / 100));
         if (psu.w < L) add("R6", "bad", ["psu"], `Nguồn ${fmtW(psu.w)} không đủ cho tải ~${fmtW(L)}.`);
-        else if (psu.w < need) add("R6", "warn", ["psu"], `Nguồn ${fmtW(psu.w)} chạy được nhưng dư tải dưới 30% (nên ≥ ${fmtW(need)}).`);
+        else if (psu.w < need) add("R6", "warn", ["psu"], `Nguồn ${fmtW(psu.w)} chạy được nhưng dư tải dưới ${prm.psuReserve}% (nên ≥ ${fmtW(need)}).`);
         else add("R6", "ok", ["psu"], `Tải ước tính ${fmtW(L)}; nguồn ${fmtW(psu.w)} còn dư.`);
         if (vga) { const okc = (vga.p16 && psu.p16) || psu.pin8 >= vga.pin8; add("R6", okc ? "ok" : "bad", ["psu", "vga"], okc ? `Nguồn có đủ đầu cắm cho VGA.` : `VGA cần ${vga.pin8} đầu 8-pin${vga.p16 ? " hoặc 12V-2x6" : ""}, nguồn chỉ có ${psu.pin8}.`); }
       }
@@ -332,11 +359,11 @@
     }
 
     return {
-      S, st, P, byId, units, POS: st.pos, get TODAY() { return now(); }, now, days, dstr, tstr, emptyCfg, cfgFromCombo, clone, part, evalRules, worst, tryPart, filterNotes, missing, canAssemble, hasOwn,
+      S, st, P, byId, ruleCfg: () => RC(), DEFAULT_RULE_CFG, normRuleCfg, units, POS: st.pos, get TODAY() { return now(); }, now, days, dstr, tstr, emptyCfg, cfgFromCombo, clone, part, evalRules, worst, tryPart, filterNotes, missing, canAssemble, hasOwn,
       cfgPrice, cfgCost, cfgNeeds, RULES, onHand, held, avail, receive, lineNeeds, linePrice, asmFee, preorderItems, couponCheck, riskScore, tierDiscount, createOrder, findOrder, olog,
       gatewayPaid, holdFor, confirmOrder, recheck, toNext, qcResult, ship, complete, cancel, poSuggestions, createPO, receivePO, supplierFor, log, sticks, load, STATUSES, normPhone,
     };
   }
 
-  return { create, emptyState };
+  return { create, emptyState, DEFAULT_RULE_CFG, normRuleCfg };
 });
