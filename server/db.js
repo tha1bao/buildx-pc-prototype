@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS rma_tickets (id text PRIMARY KEY, sn text, status tex
 CREATE TABLE IF NOT EXISTS warranties (sn text PRIMARY KEY, phone text NOT NULL, order_id text REFERENCES orders(id), updated_at timestamptz NOT NULL DEFAULT now(), doc jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS coupons (code text PRIMARY KEY, updated_at timestamptz NOT NULL DEFAULT now(), doc jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log (id bigserial PRIMARY KEY, at timestamptz NOT NULL DEFAULT now(), who text NOT NULL, action text NOT NULL, target text NOT NULL DEFAULT '');
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS pass_hash text;
+CREATE UNIQUE INDEX IF NOT EXISTS customers_email_idx ON customers (lower(email)) WHERE email IS NOT NULL AND email <> '';
+ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS pin_hash text;
+CREATE TABLE IF NOT EXISTS shared_cfgs (code text PRIMARY KEY, title text NOT NULL, doc jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 `;
 
 // Chạy fn trong một giao dịch. Thao tác ghi khóa toàn cục (advisory lock) để các lệnh

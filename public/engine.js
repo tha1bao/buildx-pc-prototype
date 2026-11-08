@@ -172,8 +172,8 @@
 
     // ===================== KHO THEO SERIAL =====================
     const units = st.units;
-    function receive(id, qty, inDate, po) { for (let i = 0; i < qty; i++) units.push({ sn: `${id}-${++st.seq.sn}`, id, inDate: inDate || now(), state: "stock", order: null, po: po || null }); }
-    const onHand = (id) => (st.availMap ? st.availMap[id] || 0 : units.filter((u) => u.id === id && u.state !== "out").length);
+    function receive(id, qty, inDate, po, sns) { for (let i = 0; i < qty; i++) units.push({ sn: sns && sns[i] ? sns[i] : `${id}-${++st.seq.sn}`, id, inDate: inDate || now(), state: "stock", order: null, po: po || null }); }
+    const onHand = (id) => (st.availMap ? st.availMap[id] || 0 : units.filter((u) => u.id === id && (u.state === "stock" || u.state === "held")).length);
     const held = (id) => (st.availMap ? 0 : units.filter((u) => u.id === id && u.state === "held").length);
     const avail = (id) => (st.availMap ? st.availMap[id] || 0 : units.filter((u) => u.id === id && u.state === "stock").length);
 
@@ -301,6 +301,8 @@
       olog(o, short.length ? `Xác nhận đơn, giữ hàng có sẵn; thiếu ${short.map((s) => s.id + "×" + s.q).join(", ")} → Chờ hàng` : "Xác nhận đơn, giữ đủ hàng");
       return null;
     }
+    // Đơn chờ hàng theo thứ tự đặt sớm nhất trước (FIFO): hàng về giữ cho người chờ lâu nhất
+    const waitingFifo = () => st.orders.filter((o) => o.status === "Chờ hàng").sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
     function recheck(o) { const short = holdFor(o); if (!short.length && o.status === "Chờ hàng") { o.status = "Đã xác nhận"; olog(o, "Đã đủ hàng sau khi nhập kho"); } return short; }
     function toNext(o) {
       if (o.status !== "Đã xác nhận") return "Đơn chưa ở trạng thái Đã xác nhận.";
@@ -311,8 +313,12 @@
     function qcResult(o, res) {
       if (o.status !== "Lắp ráp & QC") return "Đơn không ở bước Lắp ráp & QC.";
       o.qc = res;
-      if (res.pass) { o.status = "Đóng gói"; olog(o, `QC đạt: CPU ${res.cpu}°C, GPU ${res.gpu}°C, ${res.ram} lỗi RAM`); }
-      else { olog(o, `QC không đạt → mở RMA`); st.rma.unshift({ id: "RMA-" + ++st.seq.rma, sn: (units.find((u) => u.order === o.id) || {}).sn || "", order: o.id, symptom: res.note || "Không đạt ngưỡng QC", diag: "", action: "Khoanh vùng linh kiện lỗi, đổi với NPP", st: "Đang xử lý", hist: [dstr(now()) + ": mở từ QC không đạt"] }); }
+      if (res.pass) {
+        o.status = "Đóng gói"; olog(o, `QC đạt: CPU ${res.cpu}°C, GPU ${res.gpu}°C, ${res.ram} lỗi RAM`);
+        // phiếu RMA mở từ lần QC không đạt trước đó được đóng theo
+        st.rma.filter((r) => r.order === o.id && r.fromQc && !["Đã đổi", "Đã trả máy"].includes(r.st)).forEach((r) => { r.st = "Đã đổi"; r.hist.push(dstr(now()) + ": QC lại đạt, đóng phiếu"); });
+      }
+      else { olog(o, `QC không đạt → mở RMA`); st.rma.unshift({ id: "RMA-" + ++st.seq.rma, fromQc: true, sn: (units.find((u) => u.order === o.id) || {}).sn || "", order: o.id, symptom: res.note || "Không đạt ngưỡng QC", diag: "", action: "Khoanh vùng linh kiện lỗi, đổi với NPP", st: "Đang xử lý", hist: [dstr(now()) + ": mở từ QC không đạt"] }); }
       return null;
     }
     function ship(o, waybill) {
@@ -335,6 +341,7 @@
       if (["Đang giao / Chờ nhận", "Hoàn tất", "Đã hủy"].includes(o.status)) return "Chỉ hủy được trước khi xuất kho.";
       units.filter((u) => u.order === o.id && u.state === "held").forEach((u) => { u.state = "stock"; u.order = null; });
       o.status = "Đã hủy";
+      if (o.pay.paid) { o.pay.refunded = o.pay.paid; o.pay.status = "Đã hoàn tiền"; }
       olog(o, `Hủy đơn, giải phóng hàng đã giữ${o.pay.paid ? `; hoàn ${o.pay.paid.toLocaleString("vi-VN")}đ theo chính sách` : ""}`, who);
       return null;
     }
@@ -354,13 +361,13 @@
       if (p.status === "Đã nhận") return "Đơn nhập đã nhận.";
       p.items.forEach((i) => receive(i.id, i.q, now(), p.id));
       p.status = "Đã nhận"; log("Nhận hàng theo đơn nhập", p.id);
-      st.orders.filter((o) => o.status === "Chờ hàng").forEach(recheck);
+      waitingFifo().forEach(recheck);
       return null;
     }
 
     return {
       S, st, P, byId, ruleCfg: () => RC(), DEFAULT_RULE_CFG, normRuleCfg, units, POS: st.pos, get TODAY() { return now(); }, now, days, dstr, tstr, emptyCfg, cfgFromCombo, clone, part, evalRules, worst, tryPart, filterNotes, missing, canAssemble, hasOwn,
-      cfgPrice, cfgCost, cfgNeeds, RULES, onHand, held, avail, receive, lineNeeds, linePrice, asmFee, preorderItems, couponCheck, riskScore, tierDiscount, createOrder, findOrder, olog,
+      cfgPrice, cfgCost, cfgNeeds, RULES, waitingFifo, onHand, held, avail, receive, lineNeeds, linePrice, asmFee, preorderItems, couponCheck, riskScore, tierDiscount, createOrder, findOrder, olog,
       gatewayPaid, holdFor, confirmOrder, recheck, toNext, qcResult, ship, complete, cancel, poSuggestions, createPO, receivePO, supplierFor, log, sticks, load, STATUSES, normPhone,
     };
   }

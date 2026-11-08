@@ -192,7 +192,7 @@ act("order.create", { cust: true }, async ({ E, st, c, p, sess }) => {
   const o = E.createOrder({ cust, lines, ship, coupon, payMethod, channel: "Website", who: "Khách hàng", tierDisc: E.tierDiscount(tier, sub), vatInvoice });
   if (payMethod === "Công nợ B2B") o.risk = { score: o.risk.score, reasons: o.risk.reasons, needVerify: false, verified: true }; // đã có hợp đồng B2B
   let devOtp = null;
-  if (o.risk.needVerify && payMethod !== "COD") { devOtp = auth.randomCode(); o._otp = auth.hashOtp(o.id, devOtp); o._otpTries = 0; if (!OTP_DEMO) devOtp = null; }
+  if (o.risk.needVerify && !o.risk.verified) { devOtp = auth.randomCode(); o._otp = auth.hashOtp(o.id, devOtp); o._otpTries = 0; if (!OTP_DEMO) devOtp = null; }
   const needOtp = !!o._otp;
   E.log(`Khách đặt đơn ${o.channel} ${o.total.toLocaleString("vi-VN")}đ`, o.id, cust.name);
   sess.cust.orders = (sess.cust.orders || []).concat(o.id);
@@ -211,7 +211,8 @@ act("order.otp", { cust: true }, ({ E, st, p, sess }) => {
 });
 act("order.otpResend", { cust: true }, ({ E, st, p, sess }) => {
   const o = mineOr403(E, st, sess, p.id);
-  if (!o.risk.needVerify || o.risk.verified || o.pay.method === "COD" || o.pay.method === "Công nợ B2B") fail("Đơn này không cần xác minh OTP.");
+  if (!o.risk.needVerify || o.risk.verified || o.pay.method === "Công nợ B2B") fail("Đơn này không cần xác minh OTP.");
+  if (o.status !== "Mới") fail("Đơn đã được xử lý, không cần xác minh.");
   const devOtp = auth.randomCode(); o._otp = auth.hashOtp(o.id, devOtp); o._otpTries = 0;
   return { devOtp: OTP_DEMO ? devOtp : undefined };
 });
@@ -243,6 +244,7 @@ act("warranty.request", { cust: true }, ({ E, st, p, sess }) => {
   const sn = str(p.sn, 40, "serial"), desc = str(p.desc, 500, "mô tả lỗi");
   const ids = custOrderIds(st, sess.cust), w = st.warranties.find((x) => x.sn === sn);
   const known = w && ids.includes(w.order);
+  if (!known) fail("Không tìm thấy serial này trong phiếu bảo hành của bạn. Kiểm tra lại serial (in trên tem/phiếu bảo hành) hoặc đăng nhập đúng tài khoản đã mua.", 404);
   const code = "BH-" + ++st.seq.bh, id = "YC-" + ++st.seq.req;
   const name = (p.name && String(p.name).slice(0, 80)) || (known ? st.orders.find((o) => o.id === w.order).cust.name : "Khách");
   st.requests.unshift({ id, type: "Bảo hành", src: "Website", cust: name, phone: known ? w.phone : sess.cust.phone || sess.cust.guestPhone || "", what: `${sn}: ${desc}`, when: "", tech: "", st: "Mới", code, sn, order: known ? w.order : "", verifiedSn: !!known, created: E.now() });
@@ -264,6 +266,9 @@ act("profile.save", { cust: true }, async ({ c, p, sess }) => {
   if (d.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) fail("Email không hợp lệ.");
   d.consent = { zalo: !!(p.consent && p.consent.zalo), email: !!(p.consent && p.consent.email) };
   if (p.company && d.tier === "b2b") d.company = { name: str(p.company.name, 150, "tên công ty"), taxId: str(p.company.taxId, 20, "mã số thuế"), addr: str(p.company.addr, 250, "địa chỉ công ty") };
+  d.email = d.email.toLowerCase();
+  if (d.email && (await c.query("SELECT 1 FROM customers WHERE lower(email) = $1 AND phone <> $2 UNION SELECT 1 FROM staff_users WHERE email = $1", [d.email, normPhone(d.phone)])).rows.length) fail("Email này đã được dùng cho tài khoản khác.", 409);
+  await c.query("UPDATE customers SET email = $2 WHERE phone = $1", [normPhone(d.phone), d.email || null]);
   await saveCust(c, d);
 });
 act("addr.add", { cust: true }, async ({ c, p, sess }) => { const d = await custDoc(c, sess); if (d.addrs.length >= 10) fail("Tối đa 10 địa chỉ."); d.addrs.push({ label: str(p.label, 40, "tên gợi nhớ"), text: str(p.text, 200, "địa chỉ"), def: !d.addrs.length }); await saveCust(c, d); });
@@ -273,10 +278,26 @@ act("saved.add", { cust: true }, async ({ E, c, p, sess }) => {
   const d = await custDoc(c, sess); d.saved = d.saved || [];
   if (d.saved.length >= 30) fail("Tối đa 30 cấu hình đã lưu.");
   const code = "CFG-" + require("crypto").randomBytes(3).toString("hex").toUpperCase();
-  d.saved.unshift({ code, title: str(p.title, 100, "tên cấu hình"), cfg: cleanCfg(E, p.cfg), date: E.dstr(E.now()), kind: p.kind === "upgrade" ? "upgrade" : undefined });
+  const item = { code, title: str(p.title, 100, "tên cấu hình"), cfg: cleanCfg(E, p.cfg), date: E.dstr(E.now()), kind: p.kind === "upgrade" ? "upgrade" : undefined };
+  d.saved.unshift(item);
+  await c.query("INSERT INTO shared_cfgs (code, title, doc) VALUES ($1, $2, $3)", [code, item.title, JSON.stringify(item.cfg)]);
   await saveCust(c, d); return { code };
 });
 act("saved.remove", { cust: true }, async ({ c, p, sess }) => { const d = await custDoc(c, sess); d.saved = (d.saved || []).filter((s) => s.code !== p.code); await saveCust(c, d); });
+
+// Link chia sẻ cấu hình: ai có link cũng mở được (không cần đăng nhập), nội dung đã kiểm tra hợp lệ
+act("share.create", { cust: true }, async ({ E, c, p }) => {
+  const code = "CFG-" + require("crypto").randomBytes(3).toString("hex").toUpperCase();
+  const title = str(p.title || "Cấu hình PC", 100, "tên cấu hình"), cfg = cleanCfg(E, p.cfg);
+  if (!ORDER.some((s) => cfg[s].id)) fail("Cấu hình chưa có linh kiện nào.");
+  await c.query("INSERT INTO shared_cfgs (code, title, doc) VALUES ($1, $2, $3)", [code, title, JSON.stringify(cfg)]);
+  return { code };
+});
+act("share.get", { cust: true }, async ({ c, p }) => {
+  const r = await c.query("SELECT title, doc FROM shared_cfgs WHERE code = $1", [String(p.code || "").toUpperCase().slice(0, 20)]);
+  if (!r.rows.length) fail("Link cấu hình không tồn tại hoặc đã bị xóa.", 404);
+  return { title: r.rows[0].title, cfg: r.rows[0].doc };
+});
 
 // ===== Nhân viên: đơn hàng =====
 act("order.verifyCall", { path: "order" }, ({ E, p }) => { const o = findOrderOr404(E, p.id); if (o.status !== "Mới") fail("Đơn không ở trạng thái Mới."); o.risk.verified = true; delete o._otp; E.olog(o, "Gọi điện xác minh đơn rủi ro: khách xác nhận"); });
@@ -290,8 +311,17 @@ act("order.assignTech", { path: "workshop" }, ({ E, st, p }) => {
   if (tech && !st.staffUsers.some((u) => u.name === tech && u.role === "Kỹ thuật viên" && u.on)) fail("Kỹ thuật viên không hợp lệ.");
   o.tech = tech; E.olog(o, tech ? "Phân công kỹ thuật viên: " + tech : "Bỏ phân công kỹ thuật viên");
 });
-act("order.qc", { path: "ticket" }, ({ E, p, staff }) => {
+const QC_STEPS = 7; // số bước checklist lắp ráp ở màn phiếu lắp ráp
+act("order.qc", { path: "ticket" }, ({ E, st, p, staff }) => {
   const o = findOrderOr404(E, p.id), r = p.result || {};
+  if (o.status !== "Lắp ráp & QC") fail("Đơn không ở bước Lắp ráp & QC.");
+  const chk = Array.isArray(r.checklist) ? [...new Set(r.checklist.map(Number))] : [];
+  if (chk.length < QC_STEPS) fail(`Chưa hoàn thành checklist lắp ráp (${chk.length}/${QC_STEPS} bước).`);
+  const held = st.units.filter((u) => u.order === o.id).map((u) => u.sn).sort();
+  const scanned = [...new Set((Array.isArray(r.serials) ? r.serials : []).map((x) => String(x).trim().toUpperCase()).filter(Boolean))].sort();
+  const missing = held.filter((x) => !scanned.includes(x.toUpperCase())), extra = scanned.filter((x) => !held.some((h) => h.toUpperCase() === x));
+  if (missing.length || extra.length) fail(`Serial không khớp với hàng đã giữ cho đơn${missing.length ? "; chưa quét: " + missing.join(", ") : ""}${extra.length ? "; không thuộc đơn: " + extra.join(", ") : ""}.`);
+  if (!(Number(r.photos) >= 1)) fail("Cần chụp ít nhất 1 ảnh đi dây trước khi ghi QC.");
   const res = { cpu: int(r.cpu, 0, 150, "Nhiệt độ CPU"), gpu: int(r.gpu, 0, 150, "Nhiệt độ GPU"), ram: int(r.ram, 0, 99999, "Số lỗi RAM"), cb: int(r.cb, 0, 200000, "Điểm Cinebench"), min: int(r.min, 0, 1440, "Thời gian burn-in"), photos: int(r.photos || 0, 0, 50, "Số ảnh"), note: str(r.note || "", 300, "ghi chú", false), by: staff.name };
   res.pass = res.cpu < 90 && res.gpu < 85 && res.ram === 0 && res.min >= 120; // ngưỡng QC tính ở máy chủ
   if (!o.tech) o.tech = staff.name;
@@ -308,7 +338,7 @@ act("order.complete", { path: "packing" }, async ({ E, c, p }) => { const o = fi
 act("pos.lookup", { path: "pos" }, async ({ st, c, p }) => {
   const ph = normPhone(p.phone); if (!validPhone(ph)) fail("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
   const r = await c.query("SELECT doc FROM customers WHERE phone = $1", [ph]);
-  if (r.rows.length) { const d = r.rows[0].doc; return { found: true, name: d.name, phone: d.phone, addr: (d.addrs.find((a) => a.def) || {}).text || "" }; }
+  if (r.rows.length) { const d = r.rows[0].doc; return { found: true, name: d.name, phone: d.phone, tier: d.tier || "standard", addr: ((d.addrs || []).find((a) => a.def) || {}).text || "" }; }
   const prev = st.orders.find((o) => normPhone(o.cust.phone) === ph);
   return prev ? { found: true, name: prev.cust.name, phone: prev.cust.phone, addr: prev.cust.addr } : { found: false, phone: p.phone };
 });
@@ -316,22 +346,27 @@ act("pos.checkout", { path: "pos" }, async ({ E, st, c, p, staff }) => {
   const lines = cleanLines(E, p.lines), cust = cleanCust(p.cust);
   cust.addr = "Mua tại cửa hàng";
   const pay = oneOf(p.pay, ["Tiền mặt", "Chuyển khoản", "Thẻ"], "Hình thức thu tiền");
+  const pre = E.preorderItems(lines);
+  if (pre.length && !p.agreePreorder) fail("Thiếu hàng: " + pre.map((x) => `${x.id} thiếu ${x.short}`).join(", ") + ". Cần khách đồng ý đặt trước (hàng nhóm C thu cọc 30%).", 409);
   const sub = lines.reduce((t, l) => t + E.linePrice(l), 0), disc = int(p.disc || 0, 0, sub, "Giảm giá");
   const limit = Math.min(500000, sub * 0.02);
   let approver = null;
   if (disc > limit) {
     if (staff.role === "Quản lý") approver = staff.name;
     else {
-      const ap = p.approver || {};
-      const r = await c.query("SELECT name, pass_hash FROM staff_users WHERE email = $1 AND role = 'Quản lý' AND active", [String(ap.email || "").toLowerCase()]);
-      if (!r.rows.length || !auth.checkPassword(ap.password, r.rows[0].pass_hash)) fail("Giảm giá vượt chính sách: cần quản lý duyệt (email và mật khẩu quản lý không đúng).", 403);
-      approver = r.rows[0].name;
+      const pin = String(p.pin || "");
+      if (!/^\d{6}$/.test(pin)) fail("Giảm giá vượt chính sách: cần quản lý nhập mã PIN 6 số để duyệt.", 403);
+      const r = await c.query("SELECT name, pin_hash FROM staff_users WHERE role = 'Quản lý' AND active AND pin_hash IS NOT NULL");
+      const m = r.rows.find((x) => auth.checkPassword(pin, x.pin_hash));
+      if (!m) fail("Mã PIN quản lý không đúng.", 403);
+      approver = m.name;
     }
     E.log(`Duyệt giảm giá ngoài chính sách ${disc.toLocaleString("vi-VN")}đ tại quầy (người duyệt: ${approver})`, "POS", staff.name);
   }
   const o = E.createOrder({ cust, lines, ship: { mode: "pickup" }, coupon: disc ? { cp: { code: "GIẢM TẠI QUẦY" }, amt: disc } : null, payMethod: pay, channel: "Tại quầy", who: staff.name });
   o.risk = { score: 0, reasons: [], needVerify: false, verified: true };
-  E.gatewayPaid(o, o.total, staff.name, `Thu ${o.total.toLocaleString("vi-VN")}đ tại quầy (${pay})`);
+  if (pre.length) { o.preorder = pre; o.needDeposit = pre.some((x) => x.grp === "C"); if (o.needDeposit) o.pay.due = Math.round((o.total * FEES.depositRate) / 1000) * 1000; }
+  E.gatewayPaid(o, o.pay.due, staff.name, `Thu ${o.pay.due.toLocaleString("vi-VN")}đ tại quầy (${pay})${o.pay.due < o.total ? " – tiền cọc 30% hàng đặt trước" : ""}`);
   must(E.confirmOrder(o));
   if (o.status === "Đã xác nhận") { E.toNext(o); if (o.status === "Đóng gói") { must(E.ship(o, "Giao tại quầy")); must(E.complete(o)); } }
   o.cust.account = normPhone(cust.phone);
@@ -352,10 +387,17 @@ act("quote.order", { path: "quote" }, ({ E, p, staff }) => {
 const sellableId = (id) => { const x = byId(id); if (!x || x.ref) fail("Sản phẩm không hợp lệ."); return x.id; };
 act("stock.receive", { path: "stockdoc" }, ({ E, st, p }) => {
   const id = sellableId(p.id), qty = int(p.qty, 1, 200, "Số lượng"), inv = str(p.invoice, 60, "số hóa đơn NPP");
-  E.receive(id, qty, E.now(), null);
+  const sns = (Array.isArray(p.sns) ? p.sns : []).map((x) => String(x).trim().toUpperCase()).filter(Boolean);
+  if (sns.length) {
+    if (sns.length !== qty) fail(`Đã quét ${sns.length} serial nhưng số lượng nhập là ${qty}.`);
+    if (sns.some((x) => !/^[A-Z0-9][A-Z0-9-]{3,39}$/.test(x))) fail("Serial chỉ gồm chữ không dấu, số và dấu gạch (4–40 ký tự).");
+    const dup = sns.filter((x, i) => sns.indexOf(x) !== i); if (dup.length) fail("Serial bị quét trùng: " + [...new Set(dup)].join(", ") + ".");
+    const ex = sns.filter((x) => st.units.some((u) => u.sn.toUpperCase() === x)); if (ex.length) fail("Serial đã có trong kho: " + ex.join(", ") + ".");
+  }
+  E.receive(id, qty, E.now(), null, sns.length ? sns : null);
   st.units.slice(-qty).forEach((u) => (u.invoice = inv));
   E.log(`Nhập kho ${qty} serial theo ${inv}`, id);
-  st.orders.filter((o) => o.status === "Chờ hàng").forEach(E.recheck);
+  E.waitingFifo().forEach(E.recheck);
 });
 act("stock.adjust", { path: "stockdoc" }, ({ E, st, p }) => {
   const id = sellableId(p.id), qty = int(p.qty, -200, 200, "Số lượng"), reason = oneOf(p.reason, ["Kiểm kê lệch", "Hàng trưng bày / demo", "Hàng lỗi gửi NPP", "Xuất dùng nội bộ"], "Lý do");
@@ -405,7 +447,7 @@ act("request.update", { path: "requests" }, ({ E, st, p }) => {
 act("request.create", { path: "requests" }, ({ E, st, p }) => {
   const cust = cleanCust({ name: p.cust, phone: p.phone });
   const type = oneOf(p.type, ["Tư vấn", "Đặt lịch", "Bảo hành", "Khiếu nại"], "Loại");
-  const src = oneOf(p.src, ["Zalo (nhân viên nhập)", "Facebook (nhân viên nhập)", "Gọi điện"], "Kênh");
+  const src = oneOf(p.src, ["Tại cửa hàng", "Zalo (nhân viên nhập)", "Facebook (nhân viên nhập)", "Gọi điện"], "Kênh");
   const prefix = type === "Bảo hành" ? "BH-" + ++st.seq.bh : type === "Đặt lịch" ? "DV-" + ++st.seq.dv : "TV-" + ++st.seq.tv;
   const id = "YC-" + ++st.seq.req;
   st.requests.unshift({ id, type, src, cust: cust.name, phone: cust.phone, what: str(p.what, 500, "nội dung"), when: "", tech: "", st: "Mới", code: prefix, created: E.now() });
@@ -428,6 +470,22 @@ act("rma.update", { path: "rma" }, ({ E, st, p }) => {
   r[f] = v; r.hist.push(E.dstr(E.now()) + ": " + (f === "st" ? v : f === "diag" ? "Chẩn đoán: " + v : "Xử lý: " + v));
   E.log(`RMA (${f}) → ${v}`, r.id);
 });
+act("rma.replace", { path: "rma" }, ({ E, st, p }) => {
+  const r = st.rma.find((x) => x.id === p.id) || fail("Không tìm thấy phiếu RMA.", 404);
+  if (r.newSn) fail("Phiếu đã ghi serial thay thế " + r.newSn + ".");
+  const old = st.units.find((u) => u.sn === r.sn) || fail("Phiếu chưa có serial cũ hợp lệ trong kho, không đổi được.");
+  const sn = str(p.newSn, 40, "serial mới").toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9-]{3,39}$/.test(sn)) fail("Serial chỉ gồm chữ không dấu, số và dấu gạch (4–40 ký tự).");
+  if (st.units.some((u) => u.sn.toUpperCase() === sn)) fail("Serial mới đã có trong hệ thống.");
+  // serial mới thế chỗ serial cũ (cùng đơn, cùng trạng thái); serial cũ trả NPP
+  st.units.push({ sn, id: old.id, inDate: E.now(), state: old.state, order: old.order, po: null, replaces: old.sn, rma: r.id });
+  old.state = "rma"; old.order = null; old.replacedBy = sn; old.note = "Đổi với NPP theo " + r.id;
+  const w = st.warranties.find((x) => x.sn === old.sn);
+  if (w) st.warranties.push(Object.assign({}, w, { sn, replaces: old.sn }));
+  r.newSn = sn; r.st = "Đã đổi"; r.hist.push(E.dstr(E.now()) + `: NPP đổi serial ${old.sn} → ${sn}`);
+  E.log(`RMA đổi serial ${old.sn} → ${sn}`, r.id);
+  return { sn };
+});
 act("coupon.create", { path: "coupons" }, ({ E, st, p }) => {
   const code = str(p.code, 20, "mã").toUpperCase(); if (!/^[A-Z0-9]{3,20}$/.test(code)) fail("Mã chỉ gồm chữ không dấu và số (3–20 ký tự).");
   if (st.coupons.some((x) => x.code === code)) fail("Mã đã tồn tại.");
@@ -441,8 +499,8 @@ act("coupon.create", { path: "coupons" }, ({ E, st, p }) => {
 // ===== Quản trị: tài khoản nhân viên =====
 act("user.create", { path: "users" }, async ({ E, st, c, p }) => {
   const email = str(p.email, 120, "email").toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail("Email không hợp lệ.");
-  const role = oneOf(p.role, Object.keys(ROLES), "Vai trò"), pw = String(p.password || "");
-  if (pw.length < 8) fail("Mật khẩu tạm cần ít nhất 8 ký tự.");
+  const role = oneOf(p.role, Object.keys(ROLES), "Vai trò"), pw = checkStrong(p.password, "Mật khẩu tạm");
+  if ((await c.query("SELECT 1 FROM customers WHERE lower(email) = $1", [email])).rows.length) fail("Email này đang là tài khoản khách hàng.");
   const r = await c.query("INSERT INTO staff_users (email, name, role, active, pass_hash) VALUES ($1, $2, $3, true, $4) ON CONFLICT (email) DO NOTHING RETURNING email", [email, str(p.name, 80, "tên"), role, auth.hashPassword(pw)]);
   if (!r.rows.length) fail("Email đã có tài khoản.");
   st.staffUsers.push({ name: p.name, email, role, on: true });
@@ -458,8 +516,13 @@ act("user.update", { path: "users" }, async ({ E, st, c, p, staff }) => {
     if (email === staff.email) fail("Không tự khóa tài khoản của chính mình.");
     const on = !!p.value; await c.query("UPDATE staff_users SET active = $2 WHERE email = $1", [email, on]); u.on = on; E.log((on ? "Mở khóa " : "Khóa ") + u.name, email);
   } else if (p.field === "password") {
-    const pw = String(p.value || ""); if (pw.length < 8) fail("Mật khẩu cần ít nhất 8 ký tự.");
+    const pw = checkStrong(p.value, "Mật khẩu");
     await c.query("UPDATE staff_users SET pass_hash = $2 WHERE email = $1", [email, auth.hashPassword(pw)]); E.log("Đặt lại mật khẩu " + u.name, email);
+  } else if (p.field === "pin") {
+    if (u.role !== "Quản lý") fail("Chỉ tài khoản Quản lý có mã PIN duyệt.");
+    const pin = String(p.value || ""); if (!/^\d{6}$/.test(pin)) fail("Mã PIN gồm đúng 6 chữ số.");
+    if (/^(\d)\1{5}$/.test(pin) || "0123456789".includes(pin) || "9876543210".includes(pin)) fail("Mã PIN quá dễ đoán.");
+    await c.query("UPDATE staff_users SET pin_hash = $2 WHERE email = $1", [email, auth.hashPassword(pin)]); E.log("Đặt mã PIN duyệt cho " + u.name, email);
   } else fail("Trường không hợp lệ.");
 });
 act("customer.setTier", { path: "users" }, async ({ E, st, c, p }) => {
@@ -485,10 +548,10 @@ act("rules.update", { path: "rules", roles: ["Quản lý"] }, ({ E, st, p }) => 
   Object.keys(next.params).forEach((k) => { if (next.params[k] !== before.params[k]) diffs.push(`${k}: ${before.params[k]} → ${next.params[k]}`); });
   if (!diffs.length) fail("Không có thay đổi.");
   st.ruleCfg = next;
-  E.log("Sửa luật tương thích: " + diffs.join("; "), "SC35");
+  E.log("Sửa luật tương thích: " + diffs.join("; "), "Luật tương thích");
   return { changes: diffs.length };
 });
-act("rules.reset", { path: "rules", roles: ["Quản lý"] }, ({ E, st }) => { st.ruleCfg = ENG.normRuleCfg(null); E.log("Khôi phục luật tương thích mặc định", "SC35"); });
+act("rules.reset", { path: "rules", roles: ["Quản lý"] }, ({ E, st }) => { st.ruleCfg = ENG.normRuleCfg(null); E.log("Khôi phục luật tương thích mặc định", "Luật tương thích"); });
 
 // ===== Khách: yêu cầu nâng cấp tài khoản doanh nghiệp (B2B) =====
 act("b2b.request", { cust: true }, async ({ E, st, c, p, sess }) => {
@@ -563,36 +626,93 @@ async function handle(route, req, res) {
 }
 
 // ---------- đăng nhập ----------
+// Mật khẩu: 8–72 ký tự, có cả chữ và số (áp dụng cho khách và nhân viên)
+function checkStrong(pw, label) {
+  const s = String(pw || "");
+  if (s.length < 8) fail(`${label} cần ít nhất 8 ký tự.`);
+  if (s.length > 72) fail(`${label} quá dài.`);
+  if (!/[A-Za-zÀ-ỹ]/.test(s) || !/\d/.test(s)) fail(`${label} cần có cả chữ và số.`);
+  return s;
+}
+const isEmail = (v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(v || ""));
+// Mỗi vai trò nhân viên vào thẳng màn làm việc chính
+const ROLE_HOME = { "Quản lý": "reports", "Nhân viên bán hàng": "pos", "Nhân viên tư vấn": "leads", "Kỹ thuật viên": "workshop", "Thủ kho": "stock", "Quản trị viên": "users" };
+// Mã OTP gắn với mục đích (đăng ký / đặt lại mật khẩu) để mã của việc này không dùng được cho việc kia
+async function takeOtp(phone, purpose, code) {
+  return db.tx(async (c) => {
+    const r = await c.query("SELECT code_hash, expires_at, attempts FROM otp_codes WHERE phone = $1 FOR UPDATE", [phone]);
+    if (!r.rows.length || new Date(r.rows[0].expires_at) < new Date()) fail("Mã OTP đã hết hạn, vui lòng gửi lại.");
+    if (r.rows[0].attempts >= 5) fail("Nhập sai quá 5 lần, vui lòng gửi mã mới.");
+    if (auth.hashOtp(purpose + ":" + phone, String(code || "")) !== r.rows[0].code_hash) { await c.query("UPDATE otp_codes SET attempts = attempts + 1 WHERE phone = $1", [phone]); return false; }
+    await c.query("DELETE FROM otp_codes WHERE phone = $1", [phone]);
+    return true;
+  }, { lock: false });
+}
+async function staffSession(res, req, email, u) {
+  await auth.setStaff(res, req, { email, name: u.name, role: u.role });
+  await db.q("INSERT INTO audit_log (who, action, target) VALUES ($1, 'Đăng nhập trang nội bộ', $2)", [u.name, email]);
+  return { ok: true, kind: "staff", name: u.name, role: u.role, home: ROLE_HOME[u.role] || "orders" };
+}
 async function handleAuth(body, req, res, sess) {
   const op = body.op;
   if (op === "otp") {
+    const purpose = oneOf(body.purpose || "register", ["register", "reset"], "Mục đích");
     const phone = normPhone(body.phone); if (!validPhone(phone)) fail("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
+    const ex = (await db.q("SELECT pass_hash FROM customers WHERE phone = $1", [phone])).rows[0];
+    if (purpose === "register" && ex) fail(ex.pass_hash ? "Số điện thoại này đã có tài khoản. Vui lòng đăng nhập." : "Số điện thoại đã có tài khoản nhưng chưa đặt mật khẩu. Chọn \"Quên mật khẩu\" để tạo mật khẩu.", 409);
+    if (purpose === "reset" && !ex) fail("Chưa có tài khoản với số điện thoại này.", 404);
+    if (purpose === "register" && body.email) {
+      const em = String(body.email).trim().toLowerCase();
+      if (!isEmail(em)) fail("Email không hợp lệ.");
+      if ((await db.q("SELECT 1 FROM customers WHERE lower(email) = $1 UNION SELECT 1 FROM staff_users WHERE email = $1", [em])).rows.length) fail("Email này đã được dùng cho tài khoản khác.", 409);
+    }
     const code = auth.randomCode();
     await db.tx(async (c) => {
       const r = await c.query("SELECT expires_at FROM otp_codes WHERE phone = $1", [phone]);
       if (r.rows.length && new Date(r.rows[0].expires_at) - Date.now() > 270e3) fail("Vừa gửi mã, vui lòng chờ 30 giây.", 429);
-      await c.query("INSERT INTO otp_codes (phone, code_hash, expires_at, attempts) VALUES ($1, $2, now() + interval '5 minutes', 0) ON CONFLICT (phone) DO UPDATE SET code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at, attempts = 0", [phone, auth.hashOtp(phone, code)]);
+      await c.query("INSERT INTO otp_codes (phone, code_hash, expires_at, attempts) VALUES ($1, $2, now() + interval '5 minutes', 0) ON CONFLICT (phone) DO UPDATE SET code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at, attempts = 0", [phone, auth.hashOtp(purpose + ":" + phone, code)]);
     }, { lock: false });
-    const exists = (await db.q("SELECT 1 FROM customers WHERE phone = $1", [phone])).rows.length > 0;
-    return send(res, 200, { ok: true, isNew: !exists, devOtp: OTP_DEMO ? code : undefined });
+    return send(res, 200, { ok: true, devOtp: OTP_DEMO ? code : undefined });
   }
-  if (op === "verify") {
-    const phone = normPhone(body.phone);
-    const doc = await db.tx(async (c) => {
-      const r = await c.query("SELECT code_hash, expires_at, attempts FROM otp_codes WHERE phone = $1 FOR UPDATE", [phone]);
-      if (!r.rows.length || new Date(r.rows[0].expires_at) < new Date()) fail("Mã OTP đã hết hạn, vui lòng gửi lại.");
-      if (r.rows[0].attempts >= 5) fail("Nhập sai quá 5 lần, vui lòng gửi mã mới.");
-      if (auth.hashOtp(phone, String(body.code || "")) !== r.rows[0].code_hash) { await c.query("UPDATE otp_codes SET attempts = attempts + 1 WHERE phone = $1", [phone]); return null; }
-      await c.query("DELETE FROM otp_codes WHERE phone = $1", [phone]);
-      const ex = await c.query("SELECT doc FROM customers WHERE phone = $1", [phone]);
-      if (ex.rows.length) return ex.rows[0].doc;
-      const d = { name: str(body.name, 80, "họ tên"), phone: phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3"), email: "", addrs: [], consent: { zalo: false, email: false }, saved: [], tier: "standard", points: 0, spent: 0 };
-      await c.query("INSERT INTO customers (phone, name, doc) VALUES ($1, $2, $3)", [phone, d.name, JSON.stringify(d)]);
-      return d;
-    }, { lock: false });
-    if (!doc) fail("Mã OTP không đúng.");
-    await auth.setCust(res, req, Object.assign(sess.cust, { phone: doc.phone, verified: true }));
-    return send(res, 200, { ok: true, name: doc.name });
+  if (op === "register") {
+    const phone = normPhone(body.phone); if (!validPhone(phone)) fail("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
+    const name = str(body.name, 80, "họ tên"); if (name.length < 2) fail("Họ tên cần ít nhất 2 ký tự.");
+    const email = String(body.email || "").trim().toLowerCase(); if (email && !isEmail(email)) fail("Email không hợp lệ.");
+    const pw = checkStrong(body.password, "Mật khẩu");
+    if (!(await takeOtp(phone, "register", body.code))) fail("Mã OTP không đúng.");
+    const d = { name, phone: phone.replace(/^(\d{4})(\d{3})(\d{3})$/, "$1 $2 $3"), email, addrs: [], consent: { zalo: false, email: !!email }, saved: [], tier: "standard", points: 0, spent: 0 };
+    try { await db.q("INSERT INTO customers (phone, name, doc, email, pass_hash) VALUES ($1, $2, $3, $4, $5)", [phone, name, JSON.stringify(d), email || null, auth.hashPassword(pw)]); }
+    catch (e) { if (e.code === "23505") fail(/email/.test(e.constraint || "") ? "Email này đã được dùng cho tài khoản khác." : "Số điện thoại này đã có tài khoản.", 409); throw e; }
+    await auth.setCust(res, req, Object.assign(sess.cust, { phone: d.phone, verified: true }));
+    return send(res, 200, { ok: true, kind: "customer", name, first: true });
+  }
+  if (op === "login") {
+    const id = String(body.id || "").trim().toLowerCase(), pw = String(body.password || "");
+    if (!id || !pw) fail("Nhập số điện thoại hoặc email và mật khẩu.");
+    const bad = () => fail("Tài khoản hoặc mật khẩu không đúng.", 401);
+    if (isEmail(id)) {
+      const su = (await db.q("SELECT name, role, active, pass_hash FROM staff_users WHERE email = $1", [id])).rows[0];
+      if (su) {
+        if (!auth.checkPassword(pw, su.pass_hash)) bad();
+        if (!su.active) fail("Tài khoản đã bị khóa.", 403);
+        return send(res, 200, await staffSession(res, req, id, su));
+      }
+    } else if (!validPhone(id)) fail("Nhập số điện thoại 10 chữ số hoặc email.");
+    const cu = (await db.q(isEmail(id) ? "SELECT phone, name, pass_hash, doc FROM customers WHERE lower(email) = $1" : "SELECT phone, name, pass_hash, doc FROM customers WHERE phone = $1", [isEmail(id) ? id : normPhone(id)])).rows[0];
+    if (!cu) bad();
+    if (!cu.pass_hash) fail("Tài khoản chưa đặt mật khẩu. Chọn \"Quên mật khẩu\" để tạo mật khẩu bằng mã OTP.", 409);
+    if (!auth.checkPassword(pw, cu.pass_hash)) bad();
+    await auth.setCust(res, req, Object.assign(sess.cust, { phone: cu.doc.phone || cu.phone, verified: true }));
+    return send(res, 200, { ok: true, kind: "customer", name: cu.name, first: false });
+  }
+  if (op === "reset") {
+    const phone = normPhone(body.phone); if (!validPhone(phone)) fail("Số điện thoại cần 10 chữ số, bắt đầu bằng 0.");
+    const pw = checkStrong(body.password, "Mật khẩu mới");
+    if (!(await takeOtp(phone, "reset", body.code))) fail("Mã OTP không đúng.");
+    const r = await db.q("UPDATE customers SET pass_hash = $2, updated_at = now() WHERE phone = $1 RETURNING name, doc", [phone, auth.hashPassword(pw)]);
+    if (!r.rows.length) fail("Chưa có tài khoản với số điện thoại này.", 404);
+    await auth.setCust(res, req, Object.assign(sess.cust, { phone: r.rows[0].doc.phone || phone, verified: true }));
+    return send(res, 200, { ok: true, kind: "customer", name: r.rows[0].name, first: false });
   }
   if (op === "logout") { auth.clear(res, req, auth.C_COOKIE); return send(res, 200, { ok: true }); }
   if (op === "staffLogin") {
@@ -601,17 +721,14 @@ async function handleAuth(body, req, res, sess) {
     const u = r.rows[0];
     if (!u || !auth.checkPassword(body.password, u.pass_hash)) fail("Email hoặc mật khẩu không đúng.", 401);
     if (!u.active) fail("Tài khoản đã bị khóa.", 403);
-    await auth.setStaff(res, req, { email, name: u.name, role: u.role });
-    await db.tx(async (c) => { await c.query("INSERT INTO audit_log (who, action, target) VALUES ($1, 'Đăng nhập trang nội bộ', $2)", [u.name, email]); }, { lock: false });
-    return send(res, 200, { ok: true, name: u.name, role: u.role });
+    return send(res, 200, await staffSession(res, req, email, u));
   }
   if (op === "staffLogout") { auth.clear(res, req, auth.S_COOKIE); return send(res, 200, { ok: true }); }
   if (op === "changePassword") {
     if (!sess.staff) fail("Cần đăng nhập.", 401);
     const r = await db.q("SELECT pass_hash FROM staff_users WHERE email = $1 AND active", [sess.staff.email]);
     if (!r.rows.length || !auth.checkPassword(body.old, r.rows[0].pass_hash)) fail("Mật khẩu hiện tại không đúng.", 401);
-    if (String(body.password || "").length < 8) fail("Mật khẩu mới cần ít nhất 8 ký tự.");
-    await db.q("UPDATE staff_users SET pass_hash = $2 WHERE email = $1", [sess.staff.email, auth.hashPassword(body.password)]);
+    await db.q("UPDATE staff_users SET pass_hash = $2 WHERE email = $1", [sess.staff.email, auth.hashPassword(checkStrong(body.password, "Mật khẩu mới"))]);
     return send(res, 200, { ok: true });
   }
   fail("Thao tác đăng nhập không hợp lệ.");

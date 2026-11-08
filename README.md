@@ -12,6 +12,8 @@ Từ bản 2.0, dữ liệu không còn nằm trong bộ nhớ trang: **đơn h�
 | `api/` | 4 Vercel Function: `auth`, `state`, `version`, `action` |
 | `server/` | `api.js` thao tác nghiệp vụ và kiểm tra quyền; `db.js` bảng và giao dịch; `auth.js` phiên cookie ký HMAC, băm mật khẩu scrypt, OTP; `seed.js` dữ liệu mẫu; `dev.js` máy chủ chạy tại máy |
 | `test/run.js` | 54 ca kiểm thử với CSDL thật |
+| `test/flows.js` | Test case theo 7 luồng "Luồng ISC" ở tầng API (cần CSDL kiểm thử) |
+| `test/ui.js` | Test case giao diện bằng Playwright (cần máy chủ đang chạy, `BASE=http://localhost:3000`) |
 
 Nguyên tắc:
 
@@ -39,7 +41,9 @@ DATABASE_URL=postgres://user:pass@localhost:5432/buildx_test npm test # CSDL ki�
 
 ## Nghiệp vụ tài khoản và luật (bản 2.1)
 
-- **Phải đăng nhập (SĐT + OTP) mới đặt được hàng**; khách chưa đăng nhập vẫn xem, build PC và thêm vào giỏ (giỏ giữ lại sau đăng nhập). Đơn gắn với tài khoản, SĐT người nhận có thể khác.
+- **Một màn đăng nhập chung** (`#/login`): khách đăng nhập bằng **SĐT hoặc email + mật khẩu**; nhân viên dùng email công ty trên cùng màn và được đưa thẳng tới màn của vai trò (Quản lý → Báo cáo, Bán hàng → Bán tại quầy, Tư vấn → Lead, Kỹ thuật viên → Điều phối xưởng, Thủ kho → Tồn kho, Quản trị viên → Người dùng). Khách đăng nhập xong về Trang chủ; lần đầu (vừa đăng ký) về Hồ sơ thành viên.
+- **Đăng ký** cần họ tên, SĐT, email (không bắt buộc), mật khẩu ≥ 8 ký tự có cả chữ và số, xác thực SĐT bằng mã OTP. **Quên mật khẩu** đặt lại bằng OTP gửi tới SĐT (tài khoản cũ tạo bằng OTP trước đây cũng tạo mật khẩu ở đây). Mật khẩu băm bằng scrypt.
+- **Phải đăng nhập mới đặt được hàng**; khách chưa đăng nhập vẫn xem, build PC và thêm vào giỏ (giỏ giữ lại sau đăng nhập). Đơn gắn với tài khoản, SĐT người nhận có thể khác. Đơn có điểm rủi ro ≥ 50 (kể cả COD) phải xác minh OTP trước khi cửa hàng xác nhận.
 - **Đăng ký mới luôn là Member** với điểm và chi tiêu bằng 0. Đơn **Hoàn tất** cộng 1% giá trị đơn thành điểm (1 điểm = 1.000đ) và cộng tổng chi tiêu; Member chi tiêu từ 50 triệu tự lên VIP. Tài khoản doanh nghiệp B2B: khách gửi yêu cầu kèm mã số thuế, Quản lý/Quản trị viên duyệt ở màn Người dùng.
 - **Quản lý chỉnh luật tương thích** ở màn SC35: mỗi luật R1–R8 chọn *Chặn theo thiết kế / Chỉ cảnh báo / Tắt*, sửa % dự phòng nguồn, công suất nền, khoảng chừa VGA–case, bật/tắt cảnh báo bus RAM và công suất tản. Cấu hình lưu trong CSDL (`app_meta.rules`), áp dụng ngay cho Build PC, giỏ hàng, POS và kiểm tra đơn ở máy chủ; mỗi thay đổi ghi nhật ký. 24 ca kiểm thử luôn chạy trên bộ luật mặc định, kèm cột "theo cấu hình hiện tại".
 - **Giỏ hàng** hiện mục "Đơn đã đặt" với sản phẩm/combo, tiến trình và trạng thái từng đơn (tự cập nhật).
@@ -47,8 +51,9 @@ DATABASE_URL=postgres://user:pass@localhost:5432/buildx_test npm test # CSDL ki�
 
 ## Tài khoản demo
 
-- Nhân viên (mật khẩu `BuildX@2026`): `bao@buildx.vn` Quản lý · `viet.pham@buildx.vn` Bán hàng · `thao.le@buildx.vn` Tư vấn · `huy.tran@buildx.vn` Kỹ thuật viên · `khoa.do@buildx.vn` Thủ kho · `nhung.vu@buildx.vn` Quản trị viên. Đổi mật khẩu ở màn Người dùng trước khi dùng thật.
-- Khách: đăng nhập bằng SĐT + OTP. Chưa nối nhà cung cấp SMS nên mã OTP hiện ngay trên màn hình (đặt `SMS_PROVIDER` để tắt). SĐT `0912 345 678` có sẵn đơn và phiếu bảo hành.
+- Khách (mật khẩu `Khach@2026`): `0912 345 678` / `minhanh@gmail.com` VIP · `0988 999 888` B2B · `0905 112 233` Member.
+- Nhân viên (mật khẩu `BuildX@2026`): `bao@buildx.vn` Quản lý · `viet.pham@buildx.vn` Bán hàng · `thao.le@buildx.vn` Tư vấn · `huy.tran@buildx.vn` Kỹ thuật viên · `khoa.do@buildx.vn` Thủ kho · `nhung.vu@buildx.vn` Quản trị viên. Đổi mật khẩu ở màn Người dùng trước khi dùng thật. Mã PIN duyệt giảm giá tại quầy của Quản lý mẫu: `246810` (đặt lại ở màn Người dùng).
+- Chưa nối nhà cung cấp SMS nên mã OTP (đăng ký, quên mật khẩu, xác minh đơn) hiện ngay trên màn hình (đặt `SMS_PROVIDER` để tắt). SĐT `0912 345 678` có sẵn đơn và phiếu bảo hành.
 - Màn Người dùng có nút **Khôi phục dữ liệu mẫu** để làm sạch trước buổi demo.
 
 ## Kịch bản demo hai phía
