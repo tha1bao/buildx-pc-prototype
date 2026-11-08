@@ -20,12 +20,26 @@ function client() {
   };
   return {
     state: () => call("/api/state"),
-    act: (name, payload) => call("/api/action", { name, payload }),
+    act: async (name, payload) => {
+      // phiếu QC: tự kèm checklist 7 bước, serial đã giữ và số ảnh (trừ khi ca kiểm thử muốn gửi thiếu)
+      if (name === "order.qc" && payload && payload.result && !payload.raw && !payload.result.checklist) {
+        const s = await call("/api/state"), sns = (s.units || []).filter((u) => u.order === payload.id).map((u) => u.sn);
+        payload = { id: payload.id, result: Object.assign({ checklist: [0, 1, 2, 3, 4, 5, 6], serials: sns, photos: 3 }, payload.result) };
+      }
+      if (payload && payload.raw) { payload = Object.assign({}, payload); delete payload.raw; }
+      return call("/api/action", { name, payload });
+    },
     auth: (op, data) => call("/api/auth", Object.assign({ op }, data)),
   };
 }
-// Đăng nhập khách bằng OTP (tạo tài khoản nếu SĐT mới)
-async function login(c, phone, name) { const o = await c.auth("otp", { phone }); const v = await c.auth("verify", { phone, code: o.devOtp, name: name || "Khách " + phone }); if (v._status !== 200) throw new Error("login " + v.error); return c; }
+// Đăng nhập khách: SĐT chưa có tài khoản thì đăng ký (OTP + mật khẩu), có rồi thì đăng nhập bằng mật khẩu
+const PRESET_PW = "Khach@2026", TEST_PW = "Matkhau123";
+async function login(c, phone, name) {
+  const o = await c.auth("otp", { phone, purpose: "register" });
+  if (o._status === 200) { const r = await c.auth("register", { phone, name: name || "Khách " + phone, password: TEST_PW, code: o.devOtp }); if (r._status !== 200) throw new Error("register " + r.error); return c; }
+  for (const pw of [PRESET_PW, TEST_PW]) { const r = await c.auth("login", { id: phone, password: pw }); if (r._status === 200) return c; }
+  throw new Error("login " + phone);
+}
 const ok = (r) => { assert.ok(r.ok !== false && r._status === 200, `HTTP ${r._status}: ${r.error}`); return r; };
 const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị từ chối"); if (re) assert.match(r.error, re); return r; };
 
@@ -231,7 +245,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     const nv = client(); ok(await nv.auth("staffLogin", { email: "viet.pham@buildx.vn", password: "BuildX@2026" }));
     const body = { cust: { name: "Khách quầy", phone: "0955555555" }, lines: [{ type: "part", id: "R01", qty: 1 }], disc: 500000, pay: "Tiền mặt" };
     err(await nv.act("pos.checkout", body), /quản lý/);
-    const r = ok(await nv.act("pos.checkout", Object.assign({}, body, { approver: { email: "bao@buildx.vn", password: "BuildX@2026" } })));
+    const r = ok(await nv.act("pos.checkout", Object.assign({}, body, { pin: "246810" })));
     assert.strictEqual(r.result.status, "Hoàn tất");
     const after = ok(await quanly.state()).units.filter((u) => u.id === "R01" && u.state === "stock").length;
     assert.strictEqual(after, before - 1);
@@ -244,11 +258,10 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
     ok(await ktv.act("request.update", { id: r.result.id, field: "st", value: "Đang xử lý" }));
     assert.strictEqual(ok(await khach.state()).requests.find((x) => x.id === r.result.id).st, "Đang xử lý");
   });
-  await t("đăng nhập khách bằng OTP thấy đơn cũ theo SĐT", async () => {
+  await t("đăng nhập khách bằng SĐT hoặc email + mật khẩu thấy đơn cũ theo SĐT", async () => {
     const c = client();
-    const o = ok(await c.auth("otp", { phone: "0912345678" }));
-    err(await c.auth("verify", { phone: "0912345678", code: o.devOtp === "123456" ? "654321" : "123456" }), /không đúng/);
-    ok(await c.auth("verify", { phone: "0912345678", code: o.devOtp }));
+    err(await c.auth("login", { id: "0912345678", password: "SaiMatKhau1" }), /không đúng/);
+    ok(await c.auth("login", { id: "minhanh@gmail.com", password: PRESET_PW }));
     const s = ok(await c.state());
     assert.strictEqual(s.user.name, "Nguyễn Minh Anh");
     assert.ok(s.orders.length >= 1 && s.warranties.length >= 1);
@@ -257,7 +270,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
   });
   await t("hạng khách: VIP được giảm 2% do máy chủ tính; khách vãng lai không dùng được công nợ B2B", async () => {
     const vip = client();
-    const o = ok(await vip.auth("otp", { phone: "0912345678" })); ok(await vip.auth("verify", { phone: "0912345678", code: o.devOtp }));
+    ok(await vip.auth("login", { id: "0912345678", password: PRESET_PW }));
     const lines = [{ type: "part", id: "S01", qty: 2 }];
     const r = ok(await vip.act("order.create", { cust: { name: "Nguyễn Minh Anh", phone: "0912345678", addr: "18 HQV" }, lines, payMethod: "COD" }));
     const ord = r.state.orders.find((x) => x.id === r.result.id), sub = BX.P.find((p) => p.id === "S01").price * 2;
@@ -267,7 +280,7 @@ const err = (r, re) => { assert.ok(r._status >= 400, "Đáng lẽ phải bị t�
   });
   await t("doanh nghiệp B2B: giảm 5%, hóa đơn VAT, công nợ; nhân viên đổi hạng khách", async () => {
     const b = client();
-    const o = ok(await b.auth("otp", { phone: "0988999888" })); ok(await b.auth("verify", { phone: "0988999888", code: o.devOtp }));
+    ok(await b.auth("login", { id: "0988999888", password: PRESET_PW }));
     const r = ok(await b.act("order.create", { cust: { name: "NextGen", phone: "0988999888", addr: "Keangnam" }, lines: [{ type: "part", id: "R01", qty: 4 }], payMethod: "Công nợ B2B", agreePreorder: true, vatInvoice: { name: "Cty NextGen", taxId: "0109876543", addr: "Keangnam" } }));
     const ord = r.state.orders.find((x) => x.id === r.result.id);
     assert.strictEqual(ord.tierDisc, Math.round(BX.P.find((p) => p.id === "R01").price * 4 * 0.05 / 1000) * 1000);

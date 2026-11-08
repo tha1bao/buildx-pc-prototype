@@ -7,6 +7,8 @@ const db = require("./db");
 const { hashPassword } = require("./auth");
 
 const DEMO_STAFF_PASSWORD = "BuildX@2026";
+const DEMO_CUSTOMER_PASSWORD = "Khach@2026"; // mật khẩu demo của 3 tài khoản khách mẫu
+const DEMO_MANAGER_PIN = "246810"; // mã PIN duyệt giảm giá tại quầy của tài khoản Quản lý mẫu
 const STAFF = [
   { name: "Nguyễn Thái Bảo", email: "bao@buildx.vn", role: "Quản lý" },
   { name: "Trần Đức Huy", email: "huy.tran@buildx.vn", role: "Kỹ thuật viên" },
@@ -17,7 +19,7 @@ const STAFF = [
 ];
 
 async function seed(c) {
-  await c.query("TRUNCATE audit_log, warranties, rma_tickets, service_requests, purchase_orders, stock_units, orders, coupons, customers, staff_users, otp_codes RESTART IDENTITY CASCADE");
+  await c.query("TRUNCATE audit_log, warranties, rma_tickets, service_requests, purchase_orders, stock_units, orders, coupons, customers, staff_users, otp_codes, shared_cfgs RESTART IDENTITY CASCADE");
   await c.query("DELETE FROM app_meta WHERE key IN ('seq', 'seeded', 'version')");
   const base = Date.now();
   const ago = (d, h = 10) => { const x = new Date(base - d * 864e5); x.setUTCHours(h - 7, 0, 0, 0); return x; };
@@ -80,14 +82,15 @@ async function seed(c) {
   const empty = {}; Object.keys(db.TABLES).forEach((k) => (empty[k] = new Map())); empty.seq = "";
   await db.saveState(c, st, empty);
 
-  for (const u of STAFF) await c.query("INSERT INTO staff_users (email, name, role, active, pass_hash) VALUES ($1, $2, $3, true, $4)", [u.email, u.name, u.role, hashPassword(DEMO_STAFF_PASSWORD)]);
+  for (const u of STAFF) await c.query("INSERT INTO staff_users (email, name, role, active, pass_hash, pin_hash) VALUES ($1, $2, $3, true, $4, $5)", [u.email, u.name, u.role, hashPassword(DEMO_STAFF_PASSWORD), u.role === "Quản lý" ? hashPassword(DEMO_MANAGER_PIN) : null]);
   const saved = E.cfgFromCombo("gamer"); saved.case = { mode: "buy", id: "K04", qty: 1 };
   for (const pc0 of BX.PRESET_CUSTOMERS) {
     const doc = JSON.parse(JSON.stringify(pc0));
     doc.saved = pc0.tier === "vip" ? [{ code: "CFG-7Q2K", title: "BX Gamer – case trắng", cfg: saved, date: E.dstr(ago(8)) }] : [];
-    await c.query("INSERT INTO customers (phone, name, doc) VALUES ($1, $2, $3)", [db.normPhone(pc0.phone), pc0.name, JSON.stringify(doc)]);
+    await c.query("INSERT INTO customers (phone, name, doc, email, pass_hash) VALUES ($1, $2, $3, $4, $5)", [db.normPhone(pc0.phone), pc0.name, JSON.stringify(doc), (pc0.email || "").toLowerCase() || null, hashPassword(DEMO_CUSTOMER_PASSWORD)]);
+    if (doc.saved.length) await c.query("INSERT INTO shared_cfgs (code, title, doc) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [doc.saved[0].code, doc.saved[0].title, JSON.stringify(doc.saved[0].cfg)]);
   }
   await db.setMeta(c, "seeded", { at: new Date().toISOString() });
 }
 
-module.exports = { seed, DEMO_STAFF_PASSWORD, STAFF };
+module.exports = { seed, DEMO_STAFF_PASSWORD, DEMO_CUSTOMER_PASSWORD, DEMO_MANAGER_PIN, STAFF };
