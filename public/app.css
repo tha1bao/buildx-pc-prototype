@@ -202,3 +202,15 @@ fieldset legend{margin-bottom:4px}
 @media (max-width:820px){.auth{grid-template-columns:minmax(0,1fr)}.auth-side{padding:24px 20px}.auth-side h1{margin-top:6px}.auth-card{padding:22px 18px}}
 .check-line{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start;margin-top:4px}
 .check-line input{margin-top:3px}
+
+/* Đang chờ máy chủ: thanh chạy ở mép trên + nút đang xử lý */
+html.bx-busy::before{content:"";position:fixed;z-index:1000;top:0;left:0;height:3px;width:40%;background:var(--accent);animation:bxbar 1s ease-in-out infinite;pointer-events:none}
+@keyframes bxbar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+html.bx-busy{cursor:progress}
+.btn[aria-busy=true]{position:relative;color:transparent!important}
+.btn[aria-busy=true]::after{content:"";position:absolute;inset:0;margin:auto;width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-color:var(--accent) transparent var(--accent) var(--accent);animation:bxspin .7s linear infinite}
+.btn:not(.plain)[aria-busy=true]::after{border-color:#fff transparent #fff #fff}
+@keyframes bxspin{to{transform:rotate(360deg)}}
+.loading{display:flex;align-items:center;gap:10px;color:var(--muted);padding:40px 0}
+.loading .spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:bxspin .7s linear infinite}
+@media (prefers-reduced-motion:reduce){html.bx-busy::before,.btn[aria-busy=true]::after,.loading .spin{animation-duration:3s}}
