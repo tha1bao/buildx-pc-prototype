@@ -26,6 +26,8 @@ window.BXAPI = (function () {
     S.saved = S.user ? S.user.saved || (S.user.saved = []) : guestSaved;
     st.ruleCfg = s.ruleCfg || st.ruleCfg;
     if (typeof s.v === "number") v = s.v;
+    // lần mở sau: khách vãng lai thấy trang ngay bằng dữ liệu công khai lưu sẵn (tồn khả dụng, luật), rồi mới cập nhật
+    LS.set("pub", { guest: !S.user && !S.staff, availMap: st.availMap, ruleCfg: st.ruleCfg, at: Date.now() });
     ready = true; offline = null;
   }
 
@@ -62,12 +64,37 @@ window.BXAPI = (function () {
     if (onChange) onChange(opts || {});
   }
 
+  // Phản hồi ngay khi bấm: khóa nút vừa bấm (hiện vòng xoay) và hiện thanh tiến trình nếu máy chủ trả lời chậm
+  let pending = 0, barTimer = null;
+  function busy(on) {
+    const root = document.documentElement;
+    if (on) { if (pending++ === 0) barTimer = setTimeout(() => root.classList.add("bx-busy"), 150); return; }
+    if (--pending <= 0) { pending = 0; clearTimeout(barTimer); root.classList.remove("bx-busy"); }
+  }
+  // nút vừa bấm (Safari không đặt focus vào nút khi bấm nên ghi nhận qua sự kiện click)
+  let lastBtn = null, lastAt = 0;
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b) { lastBtn = b; lastAt = Date.now(); } }, true);
+  function lockButton() {
+    let el = lastBtn && Date.now() - lastAt < 1500 && document.contains(lastBtn) ? lastBtn : document.activeElement;
+    if (el && el.form && el.tagName !== "BUTTON") el = el.form.querySelector("button[type=submit]");
+    if (!el || el.tagName !== "BUTTON" || !el.closest("#app")) return () => {};
+    const was = el.disabled; // màn tự khóa nút thì để màn tự mở lại
+    el.disabled = true; el.setAttribute("aria-busy", "true");
+    return () => { if (!was) el.disabled = false; el.removeAttribute("aria-busy"); };
+  }
+  async function withBusy(p) { const unlock = lockButton(); busy(true); try { return await p(); } finally { busy(false); unlock(); } }
   async function act(name, payload) {
-    const r = await http("/api/action", { method: "POST", body: JSON.stringify({ name, payload: payload || {} }) });
+    const r = await withBusy(() => http("/api/action", { method: "POST", body: JSON.stringify({ name, payload: payload || {} }) }));
     if (r.state) { r.state.v = r.v; apply(r.state); }
     return r.result;
   }
-  const auth = (op, data) => http("/api/auth", { method: "POST", body: JSON.stringify(Object.assign({ op }, data)) });
+  const auth = (op, data) => withBusy(() => http("/api/auth", { method: "POST", body: JSON.stringify(Object.assign({ op }, data)) }));
+  // Dữ liệu công khai lưu từ lần trước (chỉ khi lần trước là khách chưa đăng nhập) → vẽ trang ngay
+  function warm() {
+    const p = LS.get("pub", null);
+    if (!p || !p.guest || !p.availMap || Date.now() - p.at > 7 * 864e5) return false;
+    st.availMap = p.availMap; if (p.ruleCfg) st.ruleCfg = p.ruleCfg; return true;
+  }
 
   // Hỏi máy chủ mỗi 4 giây xem dữ liệu có đổi không (rẻ: chỉ đọc số phiên bản)
   async function poll() {
@@ -84,5 +111,5 @@ window.BXAPI = (function () {
   function addGuestSaved(item) { guestSaved.unshift(item); S.saved = guestSaved; persist(); }
   function removeGuestSaved(code) { guestSaved = guestSaved.filter((x) => x.code !== code); S.saved = guestSaved; persist(); }
 
-  return { refresh, act, auth, start, persist, addGuestSaved, removeGuestSaved, isReady: () => ready, offline: () => offline };
+  return { refresh, act, auth, start, persist, warm, addGuestSaved, removeGuestSaved, isReady: () => ready, offline: () => offline };
 })();

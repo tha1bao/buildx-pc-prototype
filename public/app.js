@@ -130,11 +130,17 @@ window.BXA = (function () {
   function start() {
     window.addEventListener("hashchange", () => { route(); window.scrollTo(0, 0); });
     document.addEventListener("input", (e) => { if (e.target.closest && e.target.closest("#app")) dirty = true; });
-    $("#app").innerHTML = '<div class="wrap page"><p class="muted">Đang tải dữ liệu…</p></div>';
+    // Có thay đổi từ người khác: vẽ lại ngay nếu không ai đang gõ, nếu đang gõ thì hiện nút cập nhật
+    const onChange = () => { const a = document.activeElement; const typing = a && a.closest && a.closest("#app") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); if (dirty || typing) showUpdate(); else rerender(); };
+    // Trang công khai của khách vãng lai vẽ ngay bằng dữ liệu lưu sẵn, không chờ máy chủ
+    const p = (location.hash.replace(/^#\/?/, "").split("/")[0]) || "home";
+    const scr = SCREENS.find((x) => x.path === p);
+    const instant = (!scr || scr.area !== "admin") && window.BXAPI.warm();
+    if (instant) { try { route(); } catch (e) { console.error(e); } }
+    else $("#app").innerHTML = '<div class="wrap page"><div class="loading" role="status"><span class="spin" aria-hidden="true"></span>Đang tải dữ liệu…</div></div>';
     window.BXAPI.refresh({ silent: true }).catch((e) => toast(e.message)).finally(() => {
-      try { route(); } catch (e) { console.error(e); }
-      // Có thay đổi từ người khác: vẽ lại ngay nếu không ai đang gõ, nếu đang gõ thì hiện nút cập nhật
-      window.BXAPI.start(() => { const a = document.activeElement; const typing = a && a.closest && a.closest("#app") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); if (dirty || typing) showUpdate(); else rerender(); }, (msgs) => toast(msgs.slice(0, 2).join(" · ") + (msgs.length > 2 ? ` (+${msgs.length - 2})` : "")));
+      if (instant) onChange(); else { try { route(); } catch (e) { console.error(e); } }
+      window.BXAPI.start(onChange, (msgs) => toast(msgs.slice(0, 2).join(" · ") + (msgs.length > 2 ? ` (+${msgs.length - 2})` : "")));
     });
   }
   return { $, $$, fmt, tr, esc, toast, tag, roleHome, stPill, payPill, checkHtml, availPill, add, route, rerender, start, run, quiet, allowed, CAT, SCREENS, current: () => current };

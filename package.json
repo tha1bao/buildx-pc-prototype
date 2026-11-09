@@ -3,12 +3,18 @@
   "version": "2.0.0",
   "private": true,
   "description": "BuildX PC – website bán PC, linh kiện, lắp ráp và trang quản trị nội bộ (ISC301). Giao diện JS thuần + API serverless trên Vercel + PostgreSQL (Neon).",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node server/dev.js",
-    "test": "node test/run.js"
+    "test": "node test/run.js",
+    "build": "node scripts/build.js"
   },
   "dependencies": {
     "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }

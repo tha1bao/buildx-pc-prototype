@@ -31,11 +31,18 @@ Bảng CSDL: `orders`, `stock_units`, `purchase_orders`, `service_requests`, `rm
 2. Deploy lại. Lần mở đầu tiên tạo bảng và dữ liệu mẫu.
 3. (Tùy chọn) đặt `SESSION_SECRET`; nếu không, máy chủ tự sinh khóa và lưu trong CSDL.
 
+## Tốc độ
+
+- Hàm API chạy ở vùng **Singapore** (`sin1`, khai báo trong `vercel.json`), CSDL Neon cũng phải ở **Singapore (ap-southeast-1)**: mỗi thao tác chạy nhiều truy vấn nối tiếp nên máy chủ và CSDL phải cùng vùng, và cùng gần người dùng Việt Nam.
+- `npm run build` (Vercel tự chạy) gộp 6 file JS thành một, nén JS/CSS, đặt tên theo mã băm vào `dist/assets/` để trình duyệt lưu đệm 1 năm; `index.html` luôn được kiểm tra lại nên bản mới có hiệu lực ngay.
+- Khi chờ máy chủ: nút vừa bấm hiện vòng xoay và bị khóa (không bấm trùng), mép trên có thanh tiến trình. Khách chưa đăng nhập mở lại trang thấy nội dung ngay bằng dữ liệu công khai lưu từ lần trước, rồi mới cập nhật.
+
 ## Chạy tại máy
 
 ```bash
 npm install
-DATABASE_URL=postgres://user:pass@localhost:5432/buildx npm run dev   # http://localhost:3000
+DATABASE_URL=postgres://user:pass@localhost:5432/buildx npm run dev   # http://localhost:3000, dùng mã nguồn public/
+npm run build && STATIC=dist DATABASE_URL=... npm run dev              # chạy bản đã đóng gói giống Vercel
 DATABASE_URL=postgres://user:pass@localhost:5432/buildx_test npm test # CSDL kiểm thử, sẽ bị xóa sạch
 ```
 
