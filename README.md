@@ -33,7 +33,7 @@ Bảng CSDL: `orders`, `stock_units`, `purchase_orders`, `service_requests`, `rm
 
 ## Tốc độ
 
-- Hàm API chạy ở vùng **Singapore** (`sin1`, khai báo trong `vercel.json`), CSDL Neon cũng phải ở **Singapore (ap-southeast-1)**: mỗi thao tác chạy nhiều truy vấn nối tiếp nên máy chủ và CSDL phải cùng vùng, và cùng gần người dùng Việt Nam.
+- Hàm API chạy ở vùng **Singapore** (`sin1`, khai báo trong `vercel.json`), CSDL Neon ở **Singapore (ap-southeast-1)**: mỗi thao tác chạy nhiều truy vấn nối tiếp nên máy chủ và CSDL phải cùng vùng, và cùng gần người dùng Việt Nam.
 - `npm run build` (Vercel tự chạy) gộp 6 file JS thành một, nén JS/CSS, đặt tên theo mã băm vào `dist/assets/` để trình duyệt lưu đệm 1 năm; `index.html` luôn được kiểm tra lại nên bản mới có hiệu lực ngay.
 - Khi chờ máy chủ: nút vừa bấm hiện vòng xoay và bị khóa (không bấm trùng), mép trên có thanh tiến trình. Khách chưa đăng nhập mở lại trang thấy nội dung ngay bằng dữ liệu công khai lưu từ lần trước, rồi mới cập nhật.
 

@@ -6,8 +6,7 @@ const { Pool } = require("pg");
 let pool;
 function getPool() {
   if (pool) return pool;
-  // SG_DATABASE_URL: CSDL Neon ở Singapore (gắn với tiền tố SG), ưu tiên hơn CSDL cũ ở Mỹ
-  const url = process.env.SG_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) throw Object.assign(new Error("Chưa cấu hình DATABASE_URL (CSDL Neon/Postgres)."), { status: 503 });
   pool = new Pool({ connectionString: url, max: 3, idleTimeoutMillis: 10000 });
   return pool;
