@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS shared_cfgs (code text PRIMARY KEY, title text NOT NU
 async function tx(fn, { lock = true } = {}) {
   const c = await getPool().connect();
   try {
-    await c.query("BEGIN");
-    if (lock) await c.query("SELECT pg_advisory_xact_lock(424242)");
+    // mở giao dịch và lấy khóa trong cùng một lượt gọi CSDL
+    await c.query(lock ? "BEGIN; SELECT pg_advisory_xact_lock(424242)" : "BEGIN");
     const r = await fn(c);
     await c.query("COMMIT");
     return r;
@@ -93,25 +93,34 @@ function revive(x) {
 }
 
 // Đọc toàn bộ dữ liệu vận hành thành "st" cho engine. Kèm bản chụp JSON để biết cái gì đã đổi.
-async function loadState(c) {
-  const st = require("../public/engine.js").emptyState();
+// Tất cả lệnh SELECT gửi trong MỘT lần gọi (nhiều câu lệnh, không tham số) để chỉ tốn một lượt đi về CSDL.
+// extra: các câu SELECT bổ sung chạy cùng lượt (vd. đọc tài khoản khách), kết quả trả ở out.extra.
+const ORDER_BY = (kind, t) => (kind === "orders" ? "created_at DESC, id DESC" : kind === "units" ? "in_date, sn" : kind === "coupons" ? "code" : `${t.key} DESC`);
+async function loadState(c, extra) {
+  const ENG = require("../public/engine.js");
+  const st = ENG.emptyState();
   const snap = {};
-  for (const [kind, t] of Object.entries(TABLES)) {
-    const order = kind === "orders" ? "created_at DESC, id DESC" : kind === "units" ? "in_date, sn" : kind === "coupons" ? "code" : `${t.key} DESC`;
-    const r = await c.query(`SELECT ${t.key} AS k, doc FROM ${t.table} ORDER BY ${order}`);
+  const kinds = Object.entries(TABLES);
+  const sqls = kinds.map(([kind, t]) => `SELECT ${t.key} AS k, doc FROM ${t.table} ORDER BY ${ORDER_BY(kind, t)}`);
+  sqls.push("SELECT id, at, who, action, target FROM audit_log ORDER BY id DESC LIMIT 200");
+  sqls.push("SELECT email, name, role, active FROM staff_users ORDER BY created_at, email");
+  sqls.push("SELECT key, value FROM app_meta WHERE key IN ('seq', 'rules', 'version')");
+  const more = extra || [];
+  const res = await c.query(sqls.concat(more).join(";\n"));
+  kinds.forEach(([kind], i) => {
     snap[kind] = new Map();
-    st[kind] = r.rows.map((row) => { snap[kind].set(row.k, JSON.stringify(row.doc)); return revive(row.doc); });
+    st[kind] = res[i].rows.map((row) => { snap[kind].set(row.k, JSON.stringify(row.doc)); return revive(row.doc); });
     if (["pos", "requests", "rma"].includes(kind)) st[kind].sort((a, b) => num(b.id) - num(a.id)); // mới nhất trước
-  }
-  const lg = await c.query("SELECT id, at, who, action, target FROM audit_log ORDER BY id DESC LIMIT 200");
-  st.log = lg.rows.map((x) => ({ id: Number(x.id), t: x.at, who: x.who, action: x.action, target: x.target }));
-  const su = await c.query("SELECT email, name, role, active FROM staff_users ORDER BY created_at, email");
-  st.staffUsers = su.rows.map((u) => ({ name: u.name, email: u.email, role: u.role, on: u.active }));
-  st.seq = Object.assign(st.seq, (await getMeta(c, "seq")) || {});
+  });
+  const n = kinds.length;
+  st.log = res[n].rows.map((x) => ({ id: Number(x.id), t: x.at, who: x.who, action: x.action, target: x.target }));
+  st.staffUsers = res[n + 1].rows.map((u) => ({ name: u.name, email: u.email, role: u.role, on: u.active }));
+  const meta = Object.fromEntries(res[n + 2].rows.map((r) => [r.key, r.value]));
+  st.seq = Object.assign(st.seq, meta.seq || {});
   snap.seq = JSON.stringify(st.seq);
-  st.ruleCfg = require("../public/engine.js").normRuleCfg(await getMeta(c, "rules"));
+  st.ruleCfg = ENG.normRuleCfg(meta.rules || null);
   snap.rules = JSON.stringify(st.ruleCfg);
-  return { st, snap };
+  return { st, snap, version: meta.version ? Number(meta.version) : 0, extra: res.slice(n + 3) };
 }
 
 // Ghi những bản ghi mới hoặc đã đổi; nhật ký mới (chưa có id) được chèn vào audit_log.
@@ -133,7 +142,7 @@ async function saveState(c, st, snap) {
   const rulesChanged = snap.rules !== undefined && JSON.stringify(st.ruleCfg) !== snap.rules;
   if (rulesChanged) { await setMeta(c, "rules", st.ruleCfg); changed++; }
   if (changed || fresh.length) await c.query("INSERT INTO app_meta (key, value) VALUES ('version', '1') ON CONFLICT (key) DO UPDATE SET value = to_jsonb((app_meta.value)::int + 1)");
-  return changed;
+  return changed + fresh.length; // > 0: đã tăng phiên bản dữ liệu
 }
 
 async function version() {

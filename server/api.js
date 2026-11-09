@@ -50,6 +50,8 @@ function custOrderIds(st, cust) {
 }
 const stripPrivate = (o) => { const x = Object.assign({}, o); Object.keys(x).forEach((k) => k.startsWith("_") && delete x[k]); return x; };
 
+const custSql = (cust) => { const ph = cust.verified && cust.phone ? normPhone(cust.phone) : ""; return /^\d{10}$/.test(ph) ? [`SELECT doc FROM customers WHERE phone = '${ph}'`] : []; };
+const custFrom = (extra) => (extra && extra[0] && extra[0].rows.length ? custDefaults(extra[0].rows[0].doc) : null);
 async function getCustomer(c, cust) {
   if (!cust.verified || !cust.phone) return null;
   const r = await c.query("SELECT doc FROM customers WHERE phone = $1", [normPhone(cust.phone)]);
@@ -164,6 +166,10 @@ const mineOr403 = (E, st, sess, id) => { const o = findOrderOr404(E, id); if (!c
 // path: màn hình nhân viên cần quyền (theo ROLES); cust: khách (kể cả khách vãng lai) được gọi
 const A = {};
 const act = (name, opt, run) => (A[name] = Object.assign({ run }, opt));
+// Thao tác chỉ sửa tài khoản của chính khách (khóa theo dòng FOR UPDATE) hoặc bảng link chia sẻ: không cần khóa toàn cục
+const NO_GLOBAL_LOCK = new Set(["profile.save", "addr.add", "addr.del", "addr.def", "saved.add", "saved.remove", "share.create", "share.get"]);
+// Thao tác có thể sửa bảng khách hàng: đọc lại tài khoản sau khi chạy để trả về bản mới
+const WRITES_CUSTOMER = new Set(["profile.save", "addr.add", "addr.del", "addr.def", "saved.add", "saved.remove", "b2b.request", "order.complete", "customer.setTier", "pos.checkout"]);
 
 // ===== Khách hàng =====
 act("order.create", { cust: true }, async ({ E, st, c, p, sess }) => {
@@ -254,7 +260,7 @@ act("warranty.request", { cust: true }, ({ E, st, p, sess }) => {
 });
 // Hồ sơ, sổ địa chỉ, cấu hình đã lưu: chỉ khi đã đăng nhập bằng OTP
 async function custDoc(c, sess) {
-  if (!sess.cust.verified) fail("Cần đăng nhập bằng SĐT + OTP.", 401);
+  if (!sess.cust.verified) fail("Vui lòng đăng nhập.", 401);
   const r = await c.query("SELECT doc FROM customers WHERE phone = $1 FOR UPDATE", [normPhone(sess.cust.phone)]);
   if (!r.rows.length) fail("Không tìm thấy tài khoản.", 404);
   return r.rows[0].doc;
@@ -582,12 +588,12 @@ async function handle(route, req, res) {
     const sess = await auth.sessions(req);
     if (route === "state") {
       if (req.method !== "GET") fail("Phương thức không hợp lệ.", 405);
-      const out = await db.tx(async (c) => {
-        const { st } = await db.loadState(c);
-        const staff = resolveStaff(st, sess);
-        return snapshot(st, sess, staff, await getCustomer(c, sess.cust));
-      }, { lock: false });
-      return send(res, 200, Object.assign({ v: await db.version() }, out));
+      // chỉ đọc: một lượt gọi CSDL, không mở giao dịch, không chờ khóa
+      const c = await db.getPool().connect();
+      let out, v;
+      try { const L = await db.loadState(c, custSql(sess.cust)); v = L.version; out = snapshot(L.st, sess, resolveStaff(L.st, sess), custFrom(L.extra)); }
+      finally { c.release(); }
+      return send(res, 200, Object.assign({ v }, out));
     }
     if (req.method !== "POST") fail("Phương thức không hợp lệ.", 405);
     if (!/application\/json/.test(req.headers["content-type"] || "")) fail("Cần gửi JSON.", 415); // chặn form chéo trang (CSRF)
@@ -596,9 +602,9 @@ async function handle(route, req, res) {
     if (route === "action") {
       const def = A[body.name];
       if (!def) fail("Thao tác không tồn tại.", 404);
-      let state;
+      let state, version;
       const result = await db.tx(async (c) => {
-        const { st, snap } = await db.loadState(c);
+        const { st, snap, extra, version: baseV } = await db.loadState(c, custSql(sess.cust));
         const staff = resolveStaff(st, sess);
         if (!def.cust) {
           if (!staff) fail("Cần đăng nhập tài khoản nhân viên.", 401);
@@ -607,13 +613,15 @@ async function handle(route, req, res) {
         }
         const E = ENG.create(BX, st, { now: () => new Date(), actor: () => (staff ? staff.name : "Khách hàng") });
         const r = await def.run({ E, st, c, p: body.payload || {}, sess, staff, req });
-        if (body.name === "demo.reset") { const fresh = await db.loadState(c); state = snapshot(fresh.st, sess, resolveStaff(fresh.st, sess), await getCustomer(c, sess.cust)); return r; }
-        await db.saveState(c, st, snap);
-        state = snapshot(st, sess, staff, await getCustomer(c, sess.cust));
+        if (body.name === "demo.reset") { const fresh = await db.loadState(c, custSql(sess.cust)); version = fresh.version; state = snapshot(fresh.st, sess, resolveStaff(fresh.st, sess), custFrom(fresh.extra)); return r; }
+        const changed = await db.saveState(c, st, snap);
+        // tài khoản khách chỉ cần đọc lại khi thao tác vừa sửa nó (hồ sơ, địa chỉ, cấu hình đã lưu, đăng nhập…)
+        state = snapshot(st, sess, staff, WRITES_CUSTOMER.has(body.name) ? await getCustomer(c, sess.cust) : custFrom(extra));
+        version = changed ? baseV + 1 : baseV; // saveState tăng phiên bản đúng 1 khi có thay đổi
         return r;
-      });
+      }, { lock: !NO_GLOBAL_LOCK.has(body.name) });
       if (sess.dirtyCust) { delete sess.dirtyCust; await auth.setCust(res, req, sess.cust); }
-      return send(res, 200, { ok: true, result: result || null, state, v: await db.version() });
+      return send(res, 200, { ok: true, result: result || null, state, v: version });
     }
     fail("Không tìm thấy.", 404);
   } catch (e) {
